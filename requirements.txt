@@ -1,0 +1,10 @@
+# Runtime dependencies
+aiogram>=3.31,<4
+SQLAlchemy[asyncio]>=2.0.40,<2.2
+aiosqlite>=0.21
+asyncpg>=0.30
+alembic>=1.16
+APScheduler>=3.11,<4
+pydantic-settings>=2.7
+fluent.runtime>=0.4
+tzdata>=2025.1

@@ -1,0 +1,39 @@
+[project]
+name = "roommate-bot"
+version = "0.1.0"
+description = "Telegram bot that helps dorm roommates share chores: queues, reminders, history."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["migrations/versions"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "SIM", # flake8-simplify
+    "RUF", # ruff-specific
+    "ASYNC",
+]
+ignore = [
+    "RUF001", # ambiguous unicode characters: the bot is multilingual on purpose
+    "RUF002",
+    "RUF003",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["bot"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+filterwarnings = ["error::sqlalchemy.exc.SAWarning"]

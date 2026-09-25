@@ -1,0 +1,24 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local data
+data/*
+!data/.gitkeep
+*.db
+*.db-journal
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store

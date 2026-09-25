@@ -1,0 +1,35 @@
+# SQLite (default):   docker compose up -d --build
+# With PostgreSQL:    set DATABASE_URL in .env (see .env.example), then
+#                     docker compose --profile postgres up -d --build
+services:
+  bot:
+    build: .
+    image: roommate-bot:latest
+    env_file: .env
+    restart: unless-stopped
+    volumes:
+      - bot-data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+
+  postgres:
+    image: postgres:17-alpine
+    profiles: ["postgres"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: roommate
+      POSTGRES_PASSWORD: roommate
+      POSTGRES_DB: roommate
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U roommate -d roommate"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  bot-data:
+  postgres-data:
