@@ -89,6 +89,15 @@ async def test_room_created_after_reminder_time_starts_tomorrow(session):
     assert [a.category.kind for a in await plan(session, room, "2026-09-25 20:00")] == ["trash"]
 
 
+async def test_reminder_time_moved_later_on_a_late_room_fires_today(session):
+    room, (anya, _, _) = await make_room(session, now=at("2026-09-25 23:00"))
+    category = await bread(session, room)
+    await CategoryService(session).set_reminder_time(category, time(23, 5))
+    assert by_category(await plan(session, room, "2026-09-25 23:04"), category) == []
+    (assignment,) = by_category(await plan(session, room, "2026-09-25 23:05"), category)
+    assert assignment.member_id == anya.id
+
+
 async def test_accept_then_done_moves_queue_and_suppresses_duplicates(session):
     room, (anya, borya, _) = await make_room(session)
     category = await bread(session, room)

@@ -16,10 +16,8 @@ from bot.db.models import (
     Room,
 )
 from bot.db.repositories import AssignmentRepo, CategoryRepo
-from bot.services.clock import local_now
 from bot.services.errors import ServiceError
 from bot.services.queue import QueueService
-from bot.services.reminders import default_last_reminded_on
 
 MAX_NAME_LENGTH = 32
 MAX_EMOJI_LENGTH = 8
@@ -84,9 +82,7 @@ class CategoryService:
                 reminder_days=ALL_WEEKDAYS,
                 is_active=True,
                 sort_order=await self.categories.next_sort_order(room.id),
-                last_reminded_on=default_last_reminded_on(
-                    reminder_time, local_now(room.timezone, now)
-                ),
+                last_reminded_on=None,
                 created_at=now,
             )
         )

@@ -7,7 +7,7 @@ sends them and calls :meth:`ReminderService.mark_delivered`.
 
 from __future__ import annotations
 
-from datetime import date, datetime, time
+from datetime import date, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,11 +24,16 @@ def is_reminder_day(days: str, day: date) -> bool:
 
 
 def is_regular_reminder_due(category: Category, moment: datetime) -> bool:
-    """The scheduled reminder of this local day hasn't been issued yet and it's time for it."""
+    """Today's scheduled reminder hasn't been issued yet and its time has come.
+
+    A reminder scheduled before the category existed is skipped: a room created at 23:00
+    doesn't get the 18:00 reminders of that day, but a time set to 23:05 fires today.
+    """
     today = moment.date()
+    scheduled = datetime.combine(today, category.reminder_time, tzinfo=moment.tzinfo)
     return (
         is_reminder_day(category.reminder_days, today)
-        and moment.time().replace(tzinfo=None) >= category.reminder_time
+        and moment >= scheduled >= category.created_at
         and category.last_reminded_on != today
     )
 
@@ -116,8 +121,3 @@ class ReminderService:
         assignment.reminders_sent += 1
         assignment.message_chat_id = chat_id
         assignment.message_id = message_id
-
-
-def default_last_reminded_on(reminder_time: time, moment: datetime) -> date | None:
-    """For a new category: if today's reminder time already passed, start from tomorrow."""
-    return moment.date() if moment.time().replace(tzinfo=None) >= reminder_time else None
