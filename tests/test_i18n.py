@@ -14,7 +14,7 @@ from bot.i18n import LOCALES_DIR, I18n
 
 ROOT = Path(__file__).resolve().parent.parent
 KEY_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)+$")
-NOT_KEYS = {"utf-8"}
+NOT_KEYS = {"utf-8", "utf-8-sig"}
 
 
 def keys_of(locale: str) -> set[str]:

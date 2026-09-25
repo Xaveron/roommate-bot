@@ -2,7 +2,8 @@
 
 A record becomes *confirmed* or *disputed* as soon as a strict majority of the roommates who
 may vote (everybody except the performer) agrees. A disputed record doesn't count: it's
-excluded from the fair-mode statistics, and in round robin the queue effect is taken back.
+excluded from the statistics, in round robin the queue effect is taken back, and the money
+entered for it is removed from the balances.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ from bot.db.models import (
 from bot.db.repositories import CategoryRepo, DutyRepo, MemberRepo, VoteRepo
 from bot.services.clock import local_date
 from bot.services.errors import ServiceError
+from bot.services.finance import FinanceService
 from bot.services.queue import QueueService
 
 REVIEW_WINDOW = timedelta(hours=48)
@@ -98,5 +100,6 @@ class ReviewService:
                     local_date(category.room.timezone, now),
                     in_turn=duty.status == DutyStatus.DONE,
                 )
+                await FinanceService(self.session).drop_duty_expense(duty)
             await self.session.flush()
         return VoteOutcome(duty=duty, up=up, down=down, voters=voters, decided=decided)

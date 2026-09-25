@@ -9,10 +9,15 @@ from aiogram import Bot, F
 from aiogram.enums import ChatMemberStatus, ChatType
 from aiogram.exceptions import TelegramAPIError
 from aiogram.types import Chat, InlineKeyboardMarkup, Message
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.models import CategoryKind, Member, Room
 from bot.i18n import I18n, Translator
 from bot.keyboards.common import vote_keyboard
+from bot.notifications import Notifier
+from bot.render import achievement_earned_text
+from bot.services.achievements import AchievementService
+from bot.services.clock import utcnow
 from bot.services.tasks import Completion
 from bot.utils.text import bold, esc
 
@@ -71,6 +76,15 @@ def completion_text(t: Translator, completion: Completion) -> str:
 def completion_markup(t: Translator, completion: Completion) -> InlineKeyboardMarkup | None:
     """👍 / 🤨 buttons, unless nobody else lives in the room."""
     return vote_keyboard(t, completion.duty.id) if completion.voters > 0 else None
+
+
+async def announce_achievements(
+    session: AsyncSession, notifier: Notifier, room: Room, member: Member
+) -> None:
+    """Award newly earned badges and congratulate in the group chat."""
+    t = notifier.translator(room)
+    for code in await AchievementService(session).evaluate(member, utcnow()):
+        await notifier.send_group(room, achievement_earned_text(t, member, code))
 
 
 def split_long(text: str, limit: int = MAX_MESSAGE_LENGTH) -> list[str]:

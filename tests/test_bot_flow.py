@@ -23,7 +23,10 @@ from aiogram.methods import (
     EditMessageText,
     GetChatMember,
     GetMe,
+    SendDocument,
+    SendMediaGroup,
     SendMessage,
+    SendPhoto,
     SetMyCommands,
     TelegramMethod,
 )
@@ -88,6 +91,12 @@ class FakeSession(BaseSession):
                     if isinstance(method.reply_markup, InlineKeyboardMarkup)
                     else None,
                 )
+            case SendPhoto() | SendDocument():
+                return Message(message_id=next(self.ids), date=now, chat=GROUP)
+            case SendMediaGroup():
+                return [
+                    Message(message_id=next(self.ids), date=now, chat=GROUP) for _ in method.media
+                ]
             case EditMessageText():
                 return True
             case GetChatMember():
@@ -114,6 +123,10 @@ class FakeSession(BaseSession):
             for r in self.requests
             if isinstance(r, SendMessage) and (chat_id is None or r.chat_id == chat_id)
         ]
+
+    def last_with(self, chat_id: int, needle: str) -> SendMessage:
+        """The latest message to a chat containing ``needle``."""
+        return next(r for r in reversed(self.sent(chat_id)) if needle in (r.text or ""))
 
     def of(self, kind: type) -> list[Any]:
         return [r for r in self.requests if isinstance(r, kind)]
@@ -234,7 +247,7 @@ async def test_full_stage_one_flow(harness: Harness, db: Database, monkeypatch):
     await h.press(
         ANYA, TurnCb(action="done", assignment_id=turn.assignment_id).pack(), chat=private(ANYA)
     )
-    announcement = h.session.sent(GROUP.id)[-1].text
+    announcement = h.session.last_with(GROUP.id, "готово").text
     assert "🍞 Хлеб — готово! Спасибо, <b>Аня</b>" in announcement
     assert "Следующая очередь: <b>Боря</b>" in announcement
     async with db.session() as session:
@@ -250,8 +263,7 @@ async def test_full_stage_one_flow(harness: Harness, db: Database, monkeypatch):
 
     # /done out of turn by Borya for water covers Anya's pending water reminder.
     await h.message(BORYA, "/done вода")
-    done_text = h.session.sent(GROUP.id)[-1].text
-    assert "вне очереди" in done_text
+    assert h.session.last_with(GROUP.id, "вне очереди")
 
     # Settings: Borya is not an admin, Anya created the room.
     await h.message(BORYA, "/settings")
@@ -306,7 +318,7 @@ async def test_stage_two_flow(harness: Harness, db: Database):
 
     # /done in the group: the announcement carries 👍 / 🤨.
     await h.message(ANYA, "/done хлеб")
-    announcement = h.session.sent(GROUP.id)[-1]
+    announcement = h.session.last_with(GROUP.id, "готово")
     buttons = announcement.reply_markup.inline_keyboard[0]
     assert [b.text for b in buttons] == ["👍", "🤨 А вот и нет"]
     down = buttons[1].callback_data
@@ -344,5 +356,81 @@ async def test_stage_two_flow(harness: Harness, db: Database):
     assert "справедливая" in h.session.of(EditMessageText)[-1].text
     await h.message(ANYA, "/queue")
     assert "⚖️ За 30 дней" in h.session.sent(GROUP.id)[-1].text
+
+    assert not [r for r in h.session.sent() if "Что-то пошло не так" in r.text]
+
+
+async def test_stage_three_flow(harness: Harness, db: Database, monkeypatch):
+    h = harness
+    await h.message(ANYA, "/start")
+    await h.press(ANYA, JoinCb().pack())
+    await h.press(BORYA, JoinCb().pack())
+
+    # "Done" in the group -> "how much did it cost?" -> 30 split between the two of them.
+    await h.message(ANYA, "/done хлеб")
+    ask = h.session.last_with(GROUP.id, "Сколько стоило")
+    enter, skip = ask.reply_markup.inline_keyboard[0]
+    assert (enter.text, skip.text) == ("💰 Указать сумму", "Пропустить")
+    await h.press(BORYA, enter.callback_data)
+    assert h.alerts()[-1] == "Эта кнопка не для тебя 🙂"
+    await h.press(ANYA, enter.callback_data)
+    await h.message(ANYA, "30")
+    assert "делим на 2 человек (по 15 MDL)" in h.session.last_with(GROUP.id, "Записал").text
+    assert "🌱 Первый шаг" in h.session.last_with(GROUP.id, "достижение").text
+
+    # /balance and "I paid my debt back".
+    await h.message(BORYA, "/balance")
+    balance = h.session.sent(GROUP.id)[-1]
+    assert "• Боря → Аня: 15 MDL" in balance.text
+    await h.press(BORYA, balance.reply_markup.inline_keyboard[0][0].callback_data)
+    assert "Долг закрыт" in h.session.last_with(GROUP.id, "Долг закрыт").text
+    await h.message(ANYA, "/balance")
+    assert "Все в расчёте" in h.session.sent(GROUP.id)[-1].text
+
+    # /expense with a split picker: Borya pays 100 for pizza for both.
+    await h.message(BORYA, "/expense 100 пицца")
+    picker = h.session.sent(GROUP.id)[-1]
+    save = next(
+        b for row in picker.reply_markup.inline_keyboard for b in row if "Сохранить" in b.text
+    )
+    await h.press(BORYA, save.callback_data)
+    assert "пицца" in h.session.of(EditMessageText)[-1].text
+    await h.message(ANYA, "/balance")
+    assert "• Аня → Боря: 50 MDL" in h.session.sent(GROUP.id)[-1].text
+
+    # Shopping list.
+    await h.message(ANYA, "/buy соль, молоко")
+    assert "соль, молоко" in h.session.sent(GROUP.id)[-1].text
+    await h.message(BORYA, "/list")
+    listing = h.session.sent(GROUP.id)[-1]
+    salt = listing.reply_markup.inline_keyboard[0][0]
+    assert salt.text == "✅ соль"
+    await h.press(BORYA, salt.callback_data)
+    refreshed = h.session.of(EditMessageText)[-1].text
+    assert "молоко" in refreshed and "соль" not in refreshed
+    await h.message(ANYA, "/shop")
+    assert "Аня</b> идёт в магазин" in h.session.last_with(GROUP.id, "идёт в магазин").text
+
+    # Statistics, leaderboard, export.
+    await h.message(ANYA, "/stats")
+    assert h.session.of(SendPhoto), "the chart is sent as a photo"
+    assert "Статистика" in h.session.sent(GROUP.id)[-1].text
+    await h.message(ANYA, "/top")
+    assert "🥇 Аня — 1 дело 🌱" in h.session.sent(GROUP.id)[-1].text
+    await h.message(BORYA, "/export")
+    (group,) = h.session.of(SendMediaGroup)
+    assert len(group.media) == 4  # three categories + expenses
+
+    # Sunday 20:00: the weekly summary, exactly once.
+    async with db.session() as session:
+        room = await RoomRepo(session).get_by_chat_id(GROUP.id)
+        local = local_now(room.timezone, utcnow())  # type: ignore[union-attr]
+    sunday = local + timedelta(days=(6 - local.weekday()) % 7 or 7)
+    fake_now = sunday.replace(hour=20, minute=5, second=0, microsecond=0).astimezone(UTC)
+    monkeypatch.setattr(jobs, "utcnow", lambda: fake_now)
+    await jobs.reminder_tick(db, h.notifier)
+    await jobs.reminder_tick(db, h.notifier)
+    summaries = [r for r in h.session.sent(GROUP.id) if "Итоги недели" in r.text]
+    assert len(summaries) == 1
 
     assert not [r for r in h.session.sent() if "Что-то пошло не так" in r.text]

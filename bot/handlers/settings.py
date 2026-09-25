@@ -73,6 +73,8 @@ def main_text(t: Translator, room: Room) -> str:
         timezone=room.timezone,
         quiet=quiet,
         repeat=t("repeat-value", hours=room.repeat_after_hours),
+        currency=room.currency,
+        summary=t("summary-state", on=str(room.weekly_summary).lower()),
     )
 
 
@@ -299,6 +301,14 @@ async def on_settings(
                 )
             case "setrepeat":
                 await rooms.set_repeat_hours(room, int(value))
+                await _show(callback, main_text(t, room), kb.main_menu(t))
+            case "currency":
+                await _show(callback, t("settings-currency"), kb.currency_menu(t, room.currency))
+            case "setcurrency" if value in kb.CURRENCY_PRESETS:
+                await rooms.set_currency(room, value)
+                await _show(callback, main_text(t, room), kb.main_menu(t))
+            case "summary":
+                await rooms.toggle_weekly_summary(room)
                 await _show(callback, main_text(t, room), kb.main_menu(t))
             case "quiet":
                 await _show(callback, t("settings-quiet"), kb.quiet_menu(t))

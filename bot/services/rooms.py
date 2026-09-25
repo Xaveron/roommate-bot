@@ -138,6 +138,17 @@ class RoomService:
         room.repeat_after_hours = hours
         await self.session.flush()
 
+    async def set_currency(self, room: Room, currency: str) -> None:
+        currency = currency.strip().upper()
+        if not (currency.isalpha() and 2 <= len(currency) <= 5):
+            raise ServiceError("err-generic")
+        room.currency = currency
+        await self.session.flush()
+
+    async def toggle_weekly_summary(self, room: Room) -> None:
+        room.weekly_summary = not room.weekly_summary
+        await self.session.flush()
+
     async def migrate_chat(self, old_chat_id: int, new_chat_id: int) -> Room | None:
         """A group became a supergroup and got a new chat id."""
         room = await self.rooms.get_by_chat_id(old_chat_id)

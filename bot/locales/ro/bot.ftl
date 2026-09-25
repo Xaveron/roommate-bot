@@ -82,6 +82,9 @@ help-group =
     /settings — ora mementourilor, ore de liniște, fus orar, limbă (pentru admini)
     /away — plec: sări-mă în rânduri până la o dată
     /back — revin în rânduri
+    /buy sare — în lista de cumpărături · /list — lista · /shop — „merg la magazin”
+    /expense — cheltuială comună · /balance — cine cui datorează
+    /stats — statistică și grafic · /top — clasament și realizări · /export — CSV
     /members — cine locuiește în cameră
     /leave — ieși din cameră
     /cancel — anulează introducerea
@@ -96,6 +99,9 @@ help-private =
     /done — marchează o sarcină făcută
     /history — istoric
     /away și /back — plec / am revenit acasă
+    /buy, /list — lista de cumpărături
+    /expense, /balance — cheltuieli și datorii
+    /stats, /top — statistică și clasament
     /room — alege camera (dacă ai mai multe)
 
     Setările și categoriile noi — în grupul camerei.
@@ -192,6 +198,8 @@ settings-main =
     🌍 Fus orar: { $timezone }
     🌙 Ore de liniște: { $quiet }
     🔁 Repetare: { $repeat }
+    💱 Moneda: { $currency }
+    📅 Rezumat săptămânal: { $summary }
 quiet-off = dezactivate
 btn-settings-categories = ⏰ Categorii și mementouri
 btn-settings-quiet = 🌙 Ore de liniște
@@ -288,6 +296,14 @@ cmd-description = { $command ->
     [settings] Setările camerei
     [members] Locatarii camerei
     [leave] Ieși din cameră
+    [buy] Adaugă în lista de cumpărături
+    [list] Lista de cumpărături
+    [shop] Merg la magazin
+    [expense] Adaugă o cheltuială comună
+    [balance] Cine cui datorează
+    [stats] Statistica lunii
+    [top] Clasament și realizări
+    [export] Export CSV
     [away] Plec — sări-mă în rânduri
     [back] Revin în rânduri
     [room] Alege camera
@@ -359,7 +375,7 @@ away-set = 🏖 { $name } lipsește până pe { $date } inclusiv — sar peste �
 away-set-private = 🏖 Gata: te sar în rânduri până pe { $date } inclusiv. Dacă revii mai devreme — /back.
 away-status = 🏖 Lipsești până pe { $date } inclusiv. Ești deja acasă? Apasă butonul de mai jos.
 btn-back-home = 🏠 Sunt acasă
-back-done = 🏠 { $name } e din nou acasă — revine în rânduri, fără datorii 🙂
+back-done = 🏠 { $name } e din nou acasă — revine în rânduri, fără datorii (creditele ⭐ rămân) 🙂
 back-done-private = 🏠 Bine ai revenit! Ești din nou în rânduri, fără datorii.
 back-not-away = Ești deja în rânduri 🙂
 queue-away = 🏖 Lipsesc: { $names }
@@ -367,3 +383,181 @@ queue-away-member = { $name } (până pe { $date })
 err-bad-date = Nu am înțeles data. Exemple: 15.10 sau 15.10.2026
 err-date-past = Data asta a trecut deja 🙂
 err-date-too-far = Prea departe — maximum { $days } de zile.
+
+## Bani
+
+amount-ask = 💰 Cât a costat? Trimite suma (de exemplu 23.50) — o împart între toți cei care sunt acasă. Sau apasă „Sari peste”.
+amount-enter = Trimite suma, de exemplu 23.50
+amount-skipped = 👌 Bine, fără sumă.
+amount-saved = ✅ Am notat: { $amount } pentru { $category } — împărțim la { $count ->
+    [one] { $count } persoană
+    [few] { $count } persoane
+   *[other] { $count } de persoane
+  } (câte { $share }).
+amount-group = 💰 { $category }: { $name } — { $amount }. Adăugat în /balance.
+btn-amount-enter = 💰 Introdu suma
+btn-amount-skip = Sari peste
+expense-ask-amount = 💸 Cât s-a cheltuit? De exemplu: 120 sau 45.50
+expense-ask-description = Pe ce? De exemplu: „alimente pentru săptămână”. Sau „-” fără descriere.
+expense-pick =
+    💸 <b>{ $amount }</b> — { $description }
+    Între cine împărțim? Bifează persoanele și apasă „Salvează”.
+btn-expense-all = 👥 Toți
+btn-expense-save = 💾 Salvează
+expense-saved =
+    💸 { $name }: <b>{ $amount }</b> — { $description }
+    Împărțim între: { $names } (câte { $share })
+toast-saved = Salvat ✅
+balance-title = 💰 <b>Balanța — { $room }</b>
+balance-empty = 🤝 Toți sunt chit — nimeni nu datorează nimic.
+balance-line = { $name }: { $amount }
+balance-transfers = <b>Cine cui transferă:</b>
+balance-transfer = • { $debtor } → { $creditor }: { $amount }
+balance-hint = Datoria a fost returnată? Apăsați butonul transferului.
+settle-done = 🤝 Datorie închisă: { $debtor } → { $creditor }, { $amount }
+err-bad-amount = Nu am înțeles suma. Exemplu: 23.50
+err-amount-already = Suma pentru această înregistrare e deja introdusă.
+err-expense-nobody = Alege cel puțin o persoană.
+err-settle-outdated = Transferul nu mai e actual — actualizează /balance.
+err-settle-not-yours = Poate marca doar cel care a transferat sau cel care a primit banii.
+
+## Lista de cumpărături
+
+buy-usage = 🛒 Ce trebuie cumpărat? Exemplu: <code>/buy sare, lapte</code>
+buy-added = 🛒 Adăugat în listă: { $items }
+buy-nothing-new = Asta e deja în listă 🙂
+err-buy-empty = Nimic de adăugat — scrie ce trebuie cumpărat.
+err-buy-too-many = Lista e prea lungă — maximum { $max }. Bifează ce s-a cumpărat: /list
+err-item-gone = Asta nu mai e în listă 🙂
+list-title = 🛒 <b>Lista de cumpărături</b>
+list-empty = Goală — adaugă: /buy sare
+list-line = { $index }. { $item } <i>({ $name })</i>
+list-hint = Ați cumpărat? Apăsați pe produs mai jos.
+btn-item-bought = ✅ { $item }
+btn-going-shopping = 🛒 Merg la magazin
+btn-refresh = 🔄 Actualizează
+toast-bought = Bifat ✅
+shopping-going =
+    🛒 { $name } merge la magazin! Vă trebuie ceva? Adăugați: /buy …
+
+    Acum în listă:
+    { $list }
+shopping-going-dm =
+    🛒 { $name } merge la magazin ({ $room }). Îți trebuie ceva? Scrie în grup: /buy …
+
+    În listă:
+    { $list }
+shopping-going-sent = 📣 I-am anunțat pe toți!
+
+## Statistică și realizări
+
+month-title = { $month ->
+    [1] Ianuarie
+    [2] Februarie
+    [3] Martie
+    [4] Aprilie
+    [5] Mai
+    [6] Iunie
+    [7] Iulie
+    [8] August
+    [9] Septembrie
+    [10] Octombrie
+    [11] Noiembrie
+   *[12] Decembrie
+  } { $year }
+stats-title = 📊 <b>Statistica — { $period }</b>
+stats-empty = Deocamdată nimic — e momentul să începem 🙂
+stats-totals = ✅ Făcute: { $done } · ⏭ sărite: { $skipped } · 🤨 contestate: { $disputed }
+stats-spent = 💸 Cheltuit: { $amount }
+stats-by-category = Pe categorii: { $categories }
+stats-col-who = Cine
+stats-col-done = Făcute
+stats-col-skipped = Sărite
+stats-col-spent = Cheltuieli, { $currency }
+stats-chart-title = { $period } · sarcini făcute
+stats-chart-other = Altele
+btn-stats-prev = ◀ Luna trecută
+btn-stats-next = Luna următoare ▶
+top-title = 🏆 <b>Clasament — { $period }</b>
+top-empty = Încă nimeni 🙂
+top-line = { $place } { $name } — { $count ->
+    [one] { $count } sarcină
+    [few] { $count } sarcini
+   *[other] { $count } de sarcini
+  }{ $badges }
+btn-achievements = 🏅 Toate realizările
+achievements-title = 🏅 <b>Realizări</b>
+achievement-line =
+    { $name } — { $description }
+    <i>Le au: { $holders }</i>
+achievement-name = { $code ->
+    [first_duty] 🌱 Primul pas
+    [bread_king] 👑 Regele pâinii
+    [water_carrier] 💧 Sacagiul
+    [trash_ninja] 🥷 Ninja gunoiului
+    [helper] 🦸 Supererou
+    [streak_10] 🔥 Fără pauze
+    [shopper] 🛒 Aprovizionatorul
+    [treasurer] 💰 Trezorierul
+   *[centurion] 💯 Suta
+  }
+achievement-description = { $code ->
+    [first_duty] prima sarcină făcută
+    [bread_king] de 10 ori pâine cumpărată
+    [water_carrier] de 10 ori apă cumpărată
+    [trash_ninja] de 10 ori gunoiul dus
+    [helper] de 5 ori în afara rândului
+    [streak_10] 10 sarcini la rând fără să sari
+    [shopper] 10 produse cumpărate din listă
+    [treasurer] 10 cheltuieli comune plătite
+   *[centurion] 100 de sarcini făcute
+  }
+achievement-earned = 🏆 { $name } primește realizarea „{ $achievement }” — { $description }!
+
+## Rezumatul săptămânii
+
+summary-title = 📅 <b>Rezumatul săptămânii</b> ({ $period })
+summary-quiet = 😴 Săptămână liniștită — nicio sarcină marcată.
+summary-done = ✅ Sarcini făcute: { $count } — { $breakdown }
+summary-best = 🏆 Pe primul loc: { $name } ({ $count })
+summary-skips = ⏭ Sărite: { $skipped } · 🤨 contestate: { $disputed }
+summary-spent = 💸 Cheltuit în săptămână: { $amount }
+summary-achievements = 🏅 Realizări noi: { $list }
+summary-footer = O săptămână bună! 🙌
+summary-state = { $on ->
+    [true] activat
+   *[false] dezactivat
+  }
+btn-settings-currency = 💱 Moneda
+btn-settings-summary = 📅 Rezumat săptămânal pornit/oprit
+settings-currency = 💱 <b>Moneda</b> pentru cheltuieli și balanță:
+
+## Export
+
+export-caption = 📦 Export „{ $room }”: istoric pe categorii și cheltuieli (CSV, se deschide în Excel și Google Sheets).
+export-col-date = Data
+export-col-who = Cine
+export-col-status = Stare
+export-col-amount = Suma
+export-col-review = Verificare
+export-col-payer = Cine a plătit
+export-col-what = Pentru ce
+export-col-type = Tip
+export-col-split = Cine datorează
+export-status = { $status ->
+    [done] făcut
+    [skipped] sărit
+    [still_have] mai avem
+    [out_of_turn] în afara rândului
+   *[other] { $status }
+  }
+review-status = { $status ->
+    [confirmed] confirmat
+    [disputed] contestat
+   *[other] { $status }
+  }
+expense-type = { $settlement ->
+    [true] returnare datorie
+   *[false] cheltuială
+  }
+export-expenses-filename = cheltuieli

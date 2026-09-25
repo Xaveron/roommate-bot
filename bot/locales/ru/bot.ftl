@@ -82,6 +82,9 @@ help-group =
     /settings — время напоминаний, тихие часы, часовой пояс, язык (для админов)
     /away — уезжаю: пропускать меня в очередях до даты
     /back — вернуться в очереди
+    /buy соль — в список покупок · /list — список · /shop — «иду в магазин»
+    /expense — общая трата · /balance — кто кому должен
+    /stats — статистика и график · /top — рейтинг и достижения · /export — CSV
     /members — кто живёт в комнате
     /leave — выйти из комнаты
     /cancel — отменить ввод
@@ -96,6 +99,9 @@ help-private =
     /done — отметить выполнение
     /history — история
     /away и /back — уезжаю / вернулся домой
+    /buy, /list — список покупок
+    /expense, /balance — траты и долги
+    /stats, /top — статистика и рейтинг
     /room — выбрать комнату (если их несколько)
 
     Настройки и новые категории — в групповом чате комнаты.
@@ -192,6 +198,8 @@ settings-main =
     🌍 Часовой пояс: { $timezone }
     🌙 Тихие часы: { $quiet }
     🔁 Повтор: { $repeat }
+    💱 Валюта: { $currency }
+    📅 Итоги недели: { $summary }
 quiet-off = выключены
 btn-settings-categories = ⏰ Категории и напоминания
 btn-settings-quiet = 🌙 Тихие часы
@@ -288,6 +296,14 @@ cmd-description = { $command ->
     [settings] Настройки комнаты
     [members] Жильцы комнаты
     [leave] Выйти из комнаты
+    [buy] Добавить в список покупок
+    [list] Список покупок
+    [shop] Иду в магазин
+    [expense] Добавить общую трату
+    [balance] Кто кому должен
+    [stats] Статистика за месяц
+    [top] Рейтинг и достижения
+    [export] Экспорт в CSV
     [away] Уезжаю — пропускать в очередях
     [back] Вернуться в очереди
     [room] Выбрать комнату
@@ -359,7 +375,7 @@ away-set = 🏖 { $name } в отъезде до { $date } включитель�
 away-set-private = 🏖 Готово: пропускаю тебя в очередях до { $date } включительно. Вернёшься раньше — /back.
 away-status = 🏖 Ты в отъезде до { $date } включительно. Уже дома? Нажми кнопку ниже.
 btn-back-home = 🏠 Я уже дома
-back-done = 🏠 { $name } снова дома — возвращаю в очереди, без долгов 🙂
+back-done = 🏠 { $name } снова дома — возвращаю в очереди, без долгов (кредиты ⭐ сохранены) 🙂
 back-done-private = 🏠 С возвращением! Ты снова в очередях, без долгов.
 back-not-away = Ты и так в очередях 🙂
 queue-away = 🏖 В отъезде: { $names }
@@ -367,3 +383,180 @@ queue-away-member = { $name } (до { $date })
 err-bad-date = Не понял дату. Примеры: 15.10 или 15.10.2026
 err-date-past = Эта дата уже прошла 🙂
 err-date-too-far = Слишком далеко — максимум { $days } дней.
+
+## Деньги
+
+amount-ask = 💰 Сколько стоило? Пришли сумму (например, 23.50) — поделю между всеми, кто сейчас дома. Или нажми «Пропустить».
+amount-enter = Пришли сумму, например 23.50
+amount-skipped = 👌 Ок, без суммы.
+amount-saved = ✅ Записал: { $amount } за { $category } — делим на { $count ->
+    [one] { $count } человека
+   *[other] { $count } человек
+  } (по { $share }).
+amount-group = 💰 { $category }: { $name } — { $amount }. Учтено в /balance.
+btn-amount-enter = 💰 Указать сумму
+btn-amount-skip = Пропустить
+expense-ask-amount = 💸 Сколько потрачено? Например: 120 или 45.50
+expense-ask-description = На что? Например: «продукты на неделю». Или «-», чтобы без описания.
+expense-pick =
+    💸 <b>{ $amount }</b> — { $description }
+    На кого делим? Отметь людей и нажми «Сохранить».
+btn-expense-all = 👥 Все
+btn-expense-save = 💾 Сохранить
+expense-saved =
+    💸 { $name }: <b>{ $amount }</b> — { $description }
+    Делим на: { $names } (по { $share })
+toast-saved = Сохранено ✅
+balance-title = 💰 <b>Баланс — { $room }</b>
+balance-empty = 🤝 Все в расчёте — никто никому не должен.
+balance-line = { $name }: { $amount }
+balance-transfers = <b>Кто кому переводит:</b>
+balance-transfer = • { $debtor } → { $creditor }: { $amount }
+balance-hint = Вернули долг? Нажмите кнопку нужного перевода.
+settle-done = 🤝 Долг закрыт: { $debtor } → { $creditor }, { $amount }
+err-bad-amount = Не понял сумму. Пример: 23.50
+err-amount-already = Сумма для этой записи уже указана.
+err-expense-nobody = Выбери хотя бы одного человека.
+err-settle-outdated = Этот перевод уже неактуален — обнови /balance.
+err-settle-not-yours = Отметить может только тот, кто переводил, или тот, кому вернули.
+
+## Список покупок
+
+buy-usage = 🛒 Что купить? Пример: <code>/buy соль, молоко</code>
+buy-added = 🛒 Добавлено в список: { $items }
+buy-nothing-new = Это уже есть в списке 🙂
+err-buy-empty = Пусто — напиши, что купить.
+err-buy-too-many = В списке уже слишком много — максимум { $max }. Отметь купленное: /list
+err-item-gone = Этого уже нет в списке 🙂
+list-title = 🛒 <b>Список покупок</b>
+list-empty = Пусто — добавь: /buy соль
+list-line = { $index }. { $item } <i>({ $name })</i>
+list-hint = Купили? Нажмите на товар ниже.
+btn-item-bought = ✅ { $item }
+btn-going-shopping = 🛒 Иду в магазин
+btn-refresh = 🔄 Обновить
+toast-bought = Отмечено ✅
+shopping-going =
+    🛒 { $name } идёт в магазин! Что-нибудь надо? Добавляйте: /buy …
+
+    Сейчас в списке:
+    { $list }
+shopping-going-dm =
+    🛒 { $name } идёт в магазин ({ $room }). Что-нибудь надо? Напиши в общий чат: /buy …
+
+    В списке:
+    { $list }
+shopping-going-sent = 📣 Сообщил всем!
+
+## Статистика и достижения
+
+month-title = { $month ->
+    [1] Январь
+    [2] Февраль
+    [3] Март
+    [4] Апрель
+    [5] Май
+    [6] Июнь
+    [7] Июль
+    [8] Август
+    [9] Сентябрь
+    [10] Октябрь
+    [11] Ноябрь
+   *[12] Декабрь
+  } { $year }
+stats-title = 📊 <b>Статистика — { $period }</b>
+stats-empty = Пока ничего не было — самое время начать 🙂
+stats-totals = ✅ Сделано: { $done } · ⏭ пропусков: { $skipped } · 🤨 спорных: { $disputed }
+stats-spent = 💸 Потрачено: { $amount }
+stats-by-category = По категориям: { $categories }
+stats-col-who = Кто
+stats-col-done = Дел
+stats-col-skipped = Пропуски
+stats-col-spent = Траты, { $currency }
+stats-chart-title = { $period } · выполнено дел
+stats-chart-other = Другое
+btn-stats-prev = ◀ Прошлый месяц
+btn-stats-next = Следующий месяц ▶
+top-title = 🏆 <b>Рейтинг — { $period }</b>
+top-empty = Пока никого 🙂
+top-line = { $place } { $name } — { $count ->
+    [one] { $count } дело
+    [few] { $count } дела
+   *[many] { $count } дел
+  }{ $badges }
+btn-achievements = 🏅 Все достижения
+achievements-title = 🏅 <b>Достижения</b>
+achievement-line =
+    { $name } — { $description }
+    <i>Есть у: { $holders }</i>
+achievement-name = { $code ->
+    [first_duty] 🌱 Первый шаг
+    [bread_king] 👑 Хлебный король
+    [water_carrier] 💧 Водонос
+    [trash_ninja] 🥷 Мусорный ниндзя
+    [helper] 🦸 Супергерой
+    [streak_10] 🔥 Без пропусков
+    [shopper] 🛒 Добытчик
+    [treasurer] 💰 Казначей
+   *[centurion] 💯 Сотня
+  }
+achievement-description = { $code ->
+    [first_duty] первое выполненное дело
+    [bread_king] 10 раз купить хлеб
+    [water_carrier] 10 раз купить воду
+    [trash_ninja] 10 раз вынести мусор
+    [helper] 5 раз сделать вне очереди
+    [streak_10] 10 дел подряд без пропусков
+    [shopper] купить 10 вещей из списка покупок
+    [treasurer] оплатить 10 общих трат
+   *[centurion] 100 выполненных дел
+  }
+achievement-earned = 🏆 { $name } получает достижение «{ $achievement }» — { $description }!
+
+## Итоги недели
+
+summary-title = 📅 <b>Итоги недели</b> ({ $period })
+summary-quiet = 😴 Тихая неделя — ни одного отмеченного дела.
+summary-done = ✅ Сделано дел: { $count } — { $breakdown }
+summary-best = 🏆 Больше всех: { $name } ({ $count })
+summary-skips = ⏭ Пропусков: { $skipped } · 🤨 спорных: { $disputed }
+summary-spent = 💸 Потрачено за неделю: { $amount }
+summary-achievements = 🏅 Новые достижения: { $list }
+summary-footer = Хорошей недели! 🙌
+summary-state = { $on ->
+    [true] включены
+   *[false] выключены
+  }
+btn-settings-currency = 💱 Валюта
+btn-settings-summary = 📅 Итоги недели вкл/выкл
+settings-currency = 💱 <b>Валюта</b> для трат и балансов:
+
+## Экспорт
+
+export-caption = 📦 Экспорт «{ $room }»: история по категориям и траты (CSV, открывается в Excel и Google Таблицах).
+export-col-date = Дата
+export-col-who = Кто
+export-col-status = Статус
+export-col-amount = Сумма
+export-col-review = Проверка
+export-col-payer = Кто платил
+export-col-what = За что
+export-col-type = Тип
+export-col-split = Кто должен
+export-status = { $status ->
+    [done] сделано
+    [skipped] пропуск
+    [still_have] ещё есть
+    [out_of_turn] вне очереди
+   *[other] { $status }
+  }
+review-status = { $status ->
+    [confirmed] подтверждено
+    [disputed] спорно
+   *[other] { $status }
+  }
+expense-type = { $settlement ->
+    [true] возврат долга
+   *[false] трата
+  }
+export-expenses-filename = траты

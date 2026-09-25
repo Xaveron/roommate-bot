@@ -20,6 +20,7 @@ QUIET_PRESETS = (
     (time(0), time(8)),
 )
 REPEAT_PRESETS = (1, 2, 3, 4, 6, 8)
+CURRENCY_PRESETS = ("MDL", "RON", "EUR", "USD", "UAH", "RUB")
 TIMEZONE_PRESETS = (
     "Europe/Chisinau",
     "Europe/Bucharest",
@@ -47,9 +48,11 @@ def main_menu(t: Translator) -> InlineKeyboardMarkup:
     builder.button(text=t("btn-settings-quiet"), callback_data=_cb("quiet"))
     builder.button(text=t("btn-settings-timezone"), callback_data=_cb("tz"))
     builder.button(text=t("btn-settings-language"), callback_data=_cb("lang"))
+    builder.button(text=t("btn-settings-currency"), callback_data=_cb("currency"))
+    builder.button(text=t("btn-settings-summary"), callback_data=_cb("summary"))
     builder.button(text=t("btn-settings-members"), callback_data=_cb("members"))
     builder.button(text=t("btn-close"), callback_data=_cb("close"))
-    builder.adjust(1, 2, 2, 1, 1)
+    builder.adjust(1, 2, 2, 2, 1, 1)
     return builder.as_markup()
 
 
@@ -131,6 +134,16 @@ def repeat_menu(t: Translator, current: int) -> InlineKeyboardMarkup:
     builder.button(text=f"{mark}{t('btn-repeat-off')}", callback_data=_cb("setrepeat", value="0"))
     _back(builder, t, "menu")
     builder.adjust(3, 3, 1, 1)
+    return builder.as_markup()
+
+
+def currency_menu(t: Translator, current: str) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for code in CURRENCY_PRESETS:
+        mark = "• " if code == current else ""
+        builder.button(text=f"{mark}{code}", callback_data=_cb("setcurrency", value=code))
+    _back(builder, t, "menu")
+    builder.adjust(3, 3, 1)
     return builder.as_markup()
 
 

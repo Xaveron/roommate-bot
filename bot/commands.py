@@ -20,11 +20,34 @@ GROUP_COMMANDS = (
     "settings",
     "away",
     "back",
+    "buy",
+    "list",
+    "shop",
+    "expense",
+    "balance",
+    "stats",
+    "top",
+    "export",
     "members",
     "leave",
     "help",
 )
-PRIVATE_COMMANDS = ("start", "queue", "done", "history", "away", "back", "room", "help")
+PRIVATE_COMMANDS = (
+    "start",
+    "queue",
+    "done",
+    "history",
+    "buy",
+    "list",
+    "expense",
+    "balance",
+    "stats",
+    "top",
+    "away",
+    "back",
+    "room",
+    "help",
+)
 
 
 async def set_bot_commands(bot: Bot, i18n: I18n) -> None:

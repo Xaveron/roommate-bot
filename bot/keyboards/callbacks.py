@@ -45,6 +45,44 @@ class AwayCb(CallbackData, prefix="away"):
     value: int = 0
 
 
+class AmountCb(CallbackData, prefix="amt"):
+    """After "Done": action enter | skip."""
+
+    action: str
+    duty_id: int
+    user_id: int
+
+
+class ExpenseCb(CallbackData, prefix="exp"):
+    """/expense split picker. action: toggle (value = member id) | all | save | cancel."""
+
+    action: str
+    user_id: int
+    value: int = 0
+
+
+class SettleCb(CallbackData, prefix="settle"):
+    debtor_id: int
+    creditor_id: int
+    cents: int
+
+
+class ShopCb(CallbackData, prefix="shop"):
+    """action: bought (item_id) | going | refresh."""
+
+    action: str
+    item_id: int = 0
+
+
+class StatsCb(CallbackData, prefix="stats"):
+    year: int
+    month: int
+
+
+class TopCb(CallbackData, prefix="top"):
+    action: str  # achievements
+
+
 class RoomPickCb(CallbackData, prefix="room"):
     room_id: int
 

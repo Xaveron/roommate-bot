@@ -4,15 +4,22 @@ from __future__ import annotations
 
 from contextlib import suppress
 
-from aiogram import Router
+from aiogram import Bot, Router
 from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command, CommandObject
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.models import Category, Member, Room
 from bot.db.repositories import AssignmentRepo
-from bot.handlers.common import completion_markup, completion_text, name_of
+from bot.handlers.common import (
+    announce_achievements,
+    completion_markup,
+    completion_text,
+    name_of,
+)
+from bot.handlers.finance import offer_amount
 from bot.i18n import I18n, Translator
 from bot.keyboards.callbacks import DoneCb, TurnCb
 from bot.keyboards.common import done_picker, turn_keyboard
@@ -38,7 +45,9 @@ async def _edit(callback: CallbackQuery, text: str, markup: object = None) -> No
 async def on_turn_button(
     callback: CallbackQuery,
     callback_data: TurnCb,
+    bot: Bot,
     session: AsyncSession,
+    state: FSMContext,
     i18n: I18n,
     notifier: Notifier,
 ) -> None:
@@ -67,6 +76,10 @@ async def on_turn_button(
                 completion = await service.complete(assignment.id, user_id, now)
                 await callback.answer(t("toast-done"))
                 await _announce_completion(callback, completion, notifier, t, in_group=in_group)
+                chat_id = callback.message.chat.id if callback.message else user_id
+                await _after_completion(
+                    bot, session, state, notifier, t, completion, chat_id, in_group=in_group
+                )
             case "still":
                 await service.still_have(assignment.id, user_id, now)
                 await callback.answer(t("toast-snoozed"))
@@ -100,6 +113,31 @@ async def on_turn_button(
         await callback.answer(t(error.key, **error.args_), show_alert=True)
 
 
+async def _after_completion(
+    bot: Bot,
+    session: AsyncSession,
+    state: FSMContext,
+    notifier: Notifier,
+    t: Translator,
+    completion: Completion,
+    chat_id: int,
+    *,
+    in_group: bool,
+) -> None:
+    """Ask what the purchase cost and hand out newly earned badges."""
+    await offer_amount(
+        bot,
+        chat_id,
+        state,
+        t,
+        completion.duty,
+        completion.category.kind,
+        completion.member.telegram_user_id,
+        in_group=in_group,
+    )
+    await announce_achievements(session, notifier, completion.category.room, completion.member)
+
+
 async def _announce_completion(
     callback: CallbackQuery,
     completion: Completion,
@@ -124,9 +162,11 @@ async def _announce_completion(
 async def cmd_done(
     message: Message,
     command: CommandObject,
+    bot: Bot,
     session: AsyncSession,
     room: Room,
     member: Member,
+    state: FSMContext,
     t: Translator,
     notifier: Notifier,
 ) -> None:
@@ -138,10 +178,20 @@ async def cmd_done(
     if command.args:
         category = await categories.find(room, command.args)
         if category is not None:
-            text, markup = await _mark_done(
+            completion, text, markup = await _mark_done(
                 session, room, category, member, t, notifier, message.chat.id
             )
             await message.reply(text, reply_markup=markup)
+            await _after_completion(
+                bot,
+                session,
+                state,
+                notifier,
+                t,
+                completion,
+                message.chat.id,
+                in_group=message.chat.id == room.chat_id,
+            )
             return
         await message.reply(
             t("done-not-found"), reply_markup=done_picker(t, active, member.telegram_user_id)
@@ -156,9 +206,11 @@ async def cmd_done(
 async def on_done_picked(
     callback: CallbackQuery,
     callback_data: DoneCb,
+    bot: Bot,
     session: AsyncSession,
     room: Room,
     member: Member,
+    state: FSMContext,
     t: Translator,
     notifier: Notifier,
 ) -> None:
@@ -171,9 +223,14 @@ async def on_done_picked(
         await callback.answer(t(error.key, **error.args_), show_alert=True)
         return
     chat_id = callback.message.chat.id if callback.message else room.chat_id
-    text, markup = await _mark_done(session, room, category, member, t, notifier, chat_id)
+    completion, text, markup = await _mark_done(
+        session, room, category, member, t, notifier, chat_id
+    )
     await callback.answer(t("toast-done"))
     await _edit(callback, text, markup)
+    await _after_completion(
+        bot, session, state, notifier, t, completion, chat_id, in_group=chat_id == room.chat_id
+    )
 
 
 async def _mark_done(
@@ -184,7 +241,7 @@ async def _mark_done(
     t: Translator,
     notifier: Notifier,
     chat_id: int,
-) -> tuple[str, InlineKeyboardMarkup | None]:
+) -> tuple[Completion, str, InlineKeyboardMarkup | None]:
     """Record the chore; returns the text (and buttons) for the chat where it was requested."""
     completion = await TaskService(session).mark_done(category, member, utcnow())
     if completion.covered is not None:
@@ -194,6 +251,7 @@ async def _mark_done(
     announcement = completion_text(t, completion)
     markup = completion_markup(t, completion)
     if chat_id == room.chat_id:
-        return announcement, markup
+        return completion, announcement, markup
     await notifier.send_group(room, announcement, markup)
-    return t("done-private-confirm", emoji=category.emoji, category=esc(category.name)), None
+    confirm = t("done-private-confirm", emoji=category.emoji, category=esc(category.name))
+    return completion, confirm, None

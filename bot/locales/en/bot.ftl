@@ -82,6 +82,9 @@ help-group =
     /settings — reminder times, quiet hours, timezone, language (admins)
     /away — I'm away: skip me in queues until a date
     /back — back in the queues
+    /buy salt — add to the shopping list · /list — the list · /shop — “going to the shop”
+    /expense — shared expense · /balance — who owes whom
+    /stats — statistics and chart · /top — leaderboard and achievements · /export — CSV
     /members — who lives in the room
     /leave — leave the room
     /cancel — cancel input
@@ -96,6 +99,9 @@ help-private =
     /done — mark a chore as done
     /history — history
     /away and /back — leaving / back home
+    /buy, /list — shopping list
+    /expense, /balance — expenses and debts
+    /stats, /top — statistics and leaderboard
     /room — pick a room (if you have several)
 
     Settings and new categories live in the room's group chat.
@@ -192,6 +198,8 @@ settings-main =
     🌍 Timezone: { $timezone }
     🌙 Quiet hours: { $quiet }
     🔁 Repeat: { $repeat }
+    💱 Currency: { $currency }
+    📅 Weekly summary: { $summary }
 quiet-off = off
 btn-settings-categories = ⏰ Categories & reminders
 btn-settings-quiet = 🌙 Quiet hours
@@ -288,6 +296,14 @@ cmd-description = { $command ->
     [settings] Room settings
     [members] Roommates
     [leave] Leave the room
+    [buy] Add to the shopping list
+    [list] Shopping list
+    [shop] I'm going to the shop
+    [expense] Add a shared expense
+    [balance] Who owes whom
+    [stats] Monthly statistics
+    [top] Leaderboard & achievements
+    [export] Export to CSV
     [away] I'm away — skip me in queues
     [back] Back in the queues
     [room] Pick a room
@@ -359,7 +375,7 @@ away-set = 🏖 { $name } is away until { $date } inclusive — skipping them in
 away-set-private = 🏖 Done: skipping you in queues until { $date } inclusive. Back earlier? Use /back.
 away-status = 🏖 You're away until { $date } inclusive. Already home? Tap the button below.
 btn-back-home = 🏠 I'm back
-back-done = 🏠 { $name } is back home — back in the queues, no debts 🙂
+back-done = 🏠 { $name } is back home — back in the queues, no debts (⭐ credits kept) 🙂
 back-done-private = 🏠 Welcome back! You're in the queues again, no debts.
 back-not-away = You're already in the queues 🙂
 queue-away = 🏖 Away: { $names }
@@ -367,3 +383,179 @@ queue-away-member = { $name } (until { $date })
 err-bad-date = I didn't get the date. Examples: 15.10 or 15.10.2026
 err-date-past = That date has already passed 🙂
 err-date-too-far = Too far away — { $days } days at most.
+
+## Money
+
+amount-ask = 💰 How much did it cost? Send the amount (e.g. 23.50) — I'll split it between everyone at home. Or tap “Skip”.
+amount-enter = Send the amount, e.g. 23.50
+amount-skipped = 👌 OK, no amount.
+amount-saved = ✅ Saved: { $amount } for { $category } — split between { $count ->
+    [one] { $count } person
+   *[other] { $count } people
+  } ({ $share } each).
+amount-group = 💰 { $category }: { $name } — { $amount }. Added to /balance.
+btn-amount-enter = 💰 Enter amount
+btn-amount-skip = Skip
+expense-ask-amount = 💸 How much was spent? E.g. 120 or 45.50
+expense-ask-description = What for? E.g. “groceries for the week”. Or “-” for no description.
+expense-pick =
+    💸 <b>{ $amount }</b> — { $description }
+    Who shares it? Tick people and tap “Save”.
+btn-expense-all = 👥 Everyone
+btn-expense-save = 💾 Save
+expense-saved =
+    💸 { $name }: <b>{ $amount }</b> — { $description }
+    Split between: { $names } ({ $share } each)
+toast-saved = Saved ✅
+balance-title = 💰 <b>Balance — { $room }</b>
+balance-empty = 🤝 All square — nobody owes anybody.
+balance-line = { $name }: { $amount }
+balance-transfers = <b>Who pays whom:</b>
+balance-transfer = • { $debtor } → { $creditor }: { $amount }
+balance-hint = Paid a debt back? Tap the matching transfer.
+settle-done = 🤝 Debt settled: { $debtor } → { $creditor }, { $amount }
+err-bad-amount = I didn't get the amount. Example: 23.50
+err-amount-already = The amount for this record is already set.
+err-expense-nobody = Pick at least one person.
+err-settle-outdated = This transfer is out of date — refresh /balance.
+err-settle-not-yours = Only the person who paid or the one who got the money can mark it.
+
+## Shopping list
+
+buy-usage = 🛒 What to buy? Example: <code>/buy salt, milk</code>
+buy-added = 🛒 Added to the list: { $items }
+buy-nothing-new = That's already on the list 🙂
+err-buy-empty = Nothing to add — write what to buy.
+err-buy-too-many = The list is too long — { $max } items at most. Tick what's bought: /list
+err-item-gone = That's no longer on the list 🙂
+list-title = 🛒 <b>Shopping list</b>
+list-empty = Empty — add something: /buy salt
+list-line = { $index }. { $item } <i>({ $name })</i>
+list-hint = Bought something? Tap it below.
+btn-item-bought = ✅ { $item }
+btn-going-shopping = 🛒 Going to the shop
+btn-refresh = 🔄 Refresh
+toast-bought = Ticked ✅
+shopping-going =
+    🛒 { $name } is going to the shop! Need anything? Add it: /buy …
+
+    On the list now:
+    { $list }
+shopping-going-dm =
+    🛒 { $name } is going to the shop ({ $room }). Need anything? Write in the group chat: /buy …
+
+    On the list:
+    { $list }
+shopping-going-sent = 📣 Everyone's been told!
+
+## Statistics and achievements
+
+month-title = { $month ->
+    [1] January
+    [2] February
+    [3] March
+    [4] April
+    [5] May
+    [6] June
+    [7] July
+    [8] August
+    [9] September
+    [10] October
+    [11] November
+   *[12] December
+  } { $year }
+stats-title = 📊 <b>Statistics — { $period }</b>
+stats-empty = Nothing yet — a perfect time to start 🙂
+stats-totals = ✅ Done: { $done } · ⏭ skipped: { $skipped } · 🤨 disputed: { $disputed }
+stats-spent = 💸 Spent: { $amount }
+stats-by-category = By category: { $categories }
+stats-col-who = Who
+stats-col-done = Done
+stats-col-skipped = Skipped
+stats-col-spent = Spent, { $currency }
+stats-chart-title = { $period } · chores done
+stats-chart-other = Other
+btn-stats-prev = ◀ Previous month
+btn-stats-next = Next month ▶
+top-title = 🏆 <b>Leaderboard — { $period }</b>
+top-empty = Nobody yet 🙂
+top-line = { $place } { $name } — { $count ->
+    [one] { $count } chore
+   *[other] { $count } chores
+  }{ $badges }
+btn-achievements = 🏅 All achievements
+achievements-title = 🏅 <b>Achievements</b>
+achievement-line =
+    { $name } — { $description }
+    <i>Earned by: { $holders }</i>
+achievement-name = { $code ->
+    [first_duty] 🌱 First Step
+    [bread_king] 👑 Bread King
+    [water_carrier] 💧 Water Carrier
+    [trash_ninja] 🥷 Trash Ninja
+    [helper] 🦸 Superhero
+    [streak_10] 🔥 No Skips
+    [shopper] 🛒 Provider
+    [treasurer] 💰 Treasurer
+   *[centurion] 💯 Centurion
+  }
+achievement-description = { $code ->
+    [first_duty] the first chore done
+    [bread_king] bought bread 10 times
+    [water_carrier] bought water 10 times
+    [trash_ninja] took out the trash 10 times
+    [helper] 5 chores out of turn
+    [streak_10] 10 chores in a row without skipping
+    [shopper] bought 10 items from the shopping list
+    [treasurer] paid for 10 shared expenses
+   *[centurion] 100 chores done
+  }
+achievement-earned = 🏆 { $name } earns “{ $achievement }” — { $description }!
+
+## Weekly summary
+
+summary-title = 📅 <b>Weekly summary</b> ({ $period })
+summary-quiet = 😴 A quiet week — no chores marked.
+summary-done = ✅ Chores done: { $count } — { $breakdown }
+summary-best = 🏆 Top of the week: { $name } ({ $count })
+summary-skips = ⏭ Skipped: { $skipped } · 🤨 disputed: { $disputed }
+summary-spent = 💸 Spent this week: { $amount }
+summary-achievements = 🏅 New achievements: { $list }
+summary-footer = Have a great week! 🙌
+summary-state = { $on ->
+    [true] on
+   *[false] off
+  }
+btn-settings-currency = 💱 Currency
+btn-settings-summary = 📅 Weekly summary on/off
+settings-currency = 💱 <b>Currency</b> for expenses and balances:
+
+## Export
+
+export-caption = 📦 Export of “{ $room }”: history by category and expenses (CSV, opens in Excel and Google Sheets).
+export-col-date = Date
+export-col-who = Who
+export-col-status = Status
+export-col-amount = Amount
+export-col-review = Review
+export-col-payer = Paid by
+export-col-what = What for
+export-col-type = Type
+export-col-split = Owed by
+export-status = { $status ->
+    [done] done
+    [skipped] skipped
+    [still_have] still have
+    [out_of_turn] out of turn
+   *[other] { $status }
+  }
+review-status = { $status ->
+    [confirmed] confirmed
+    [disputed] disputed
+   *[other] { $status }
+  }
+expense-type = { $settlement ->
+    [true] debt repayment
+   *[false] expense
+  }
+export-expenses-filename = expenses
