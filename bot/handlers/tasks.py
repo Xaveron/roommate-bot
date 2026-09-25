@@ -7,12 +7,12 @@ from contextlib import suppress
 from aiogram import Router
 from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command, CommandObject
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.models import Category, Member, Room
 from bot.db.repositories import AssignmentRepo
-from bot.handlers.common import completion_text, name_of
+from bot.handlers.common import completion_markup, completion_text, name_of
 from bot.i18n import I18n, Translator
 from bot.keyboards.callbacks import DoneCb, TurnCb
 from bot.keyboards.common import done_picker, turn_keyboard
@@ -110,13 +110,14 @@ async def _announce_completion(
 ) -> None:
     room = completion.category.room
     announcement = completion_text(t, completion)
+    markup = completion_markup(t, completion)
     if in_group:
-        await _edit(callback, announcement)
+        await _edit(callback, announcement, markup)
     else:
         if completion.assignment is not None:
             text = reminder_text(t, completion.assignment)
             await _edit(callback, f"{text}\n\n{t('turn-done')}")
-        await notifier.send_group(room, announcement)
+        await notifier.send_group(room, announcement, markup)
 
 
 @router.message(Command("done"), flags={"require": "member"})
@@ -137,8 +138,10 @@ async def cmd_done(
     if command.args:
         category = await categories.find(room, command.args)
         if category is not None:
-            text = await _mark_done(session, room, category, member, t, notifier, message.chat.id)
-            await message.reply(text)
+            text, markup = await _mark_done(
+                session, room, category, member, t, notifier, message.chat.id
+            )
+            await message.reply(text, reply_markup=markup)
             return
         await message.reply(
             t("done-not-found"), reply_markup=done_picker(t, active, member.telegram_user_id)
@@ -168,9 +171,9 @@ async def on_done_picked(
         await callback.answer(t(error.key, **error.args_), show_alert=True)
         return
     chat_id = callback.message.chat.id if callback.message else room.chat_id
-    text = await _mark_done(session, room, category, member, t, notifier, chat_id)
+    text, markup = await _mark_done(session, room, category, member, t, notifier, chat_id)
     await callback.answer(t("toast-done"))
-    await _edit(callback, text)
+    await _edit(callback, text, markup)
 
 
 async def _mark_done(
@@ -181,15 +184,16 @@ async def _mark_done(
     t: Translator,
     notifier: Notifier,
     chat_id: int,
-) -> str:
-    """Record the chore; returns the text for the chat where it was requested."""
+) -> tuple[str, InlineKeyboardMarkup | None]:
+    """Record the chore; returns the text (and buttons) for the chat where it was requested."""
     completion = await TaskService(session).mark_done(category, member, utcnow())
     if completion.covered is not None:
         await notifier.close_reminder(
             completion.covered, t("turn-covered", name=bold(member.display_name))
         )
     announcement = completion_text(t, completion)
+    markup = completion_markup(t, completion)
     if chat_id == room.chat_id:
-        return announcement
-    await notifier.send_group(room, announcement)
-    return t("done-private-confirm", emoji=category.emoji, category=esc(category.name))
+        return announcement, markup
+    await notifier.send_group(room, announcement, markup)
+    return t("done-private-confirm", emoji=category.emoji, category=esc(category.name)), None

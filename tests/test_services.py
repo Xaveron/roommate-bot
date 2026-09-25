@@ -12,7 +12,7 @@ from bot.db.repositories import QueueRepo, UserRepo
 from bot.services.categories import CategoryService
 from bot.services.errors import ServiceError
 from bot.services.history import HistoryService
-from bot.services.reminders import ReminderService
+from bot.services.reminders import Delivery, DeliveryKind, ReminderService
 from bot.services.rooms import RoomService
 from bot.services.tasks import TaskService
 from tests.conftest import NAMES, at, make_room
@@ -24,14 +24,26 @@ async def bread(session: AsyncSession, room) -> Category:
     return next(c for c in await CategoryService(session).list(room) if c.kind == "bread")
 
 
-async def plan(session: AsyncSession, room, local: str):
-    """Run the planner and pretend every reminder was delivered."""
+async def deliveries(session: AsyncSession, room, local: str) -> list[Delivery]:
+    """Run the planner and pretend everything was delivered."""
     now = at(local)
     due = await ReminderService(session).plan_room(room, now)
-    for assignment in due:
-        ReminderService.mark_delivered(assignment, now, chat_id=None, message_id=None)
+    for delivery in due:
+        if delivery.kind == DeliveryKind.NUDGE:
+            ReminderService.mark_nudged(delivery.assignment, now)
+        else:
+            ReminderService.mark_delivered(delivery.assignment, now, chat_id=None, message_id=None)
     await session.flush()
     return due
+
+
+async def plan(session: AsyncSession, room, local: str):
+    """Assignments whose reminder was (re)sent by the planner at this local time."""
+    return [
+        d.assignment
+        for d in await deliveries(session, room, local)
+        if d.kind == DeliveryKind.REMINDER
+    ]
 
 
 def by_category(due, category: Category):

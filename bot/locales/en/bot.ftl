@@ -80,10 +80,13 @@ help-group =
     /history — history by category
     /add_category — add your own category
     /settings — reminder times, quiet hours, timezone, language (admins)
+    /away — I'm away: skip me in queues until a date
+    /back — back in the queues
     /members — who lives in the room
     /leave — leave the room
     /cancel — cancel input
 
+    Completion messages have 👍 and 🤨 buttons: if the majority disagrees, the record doesn't count.
     Reminders come in private chat — open me and tap “Start”.
 help-private =
     <b>RoomMate Bot</b>
@@ -92,6 +95,7 @@ help-private =
     /queue — whose turn it is
     /done — mark a chore as done
     /history — history
+    /away and /back — leaving / back home
     /room — pick a room (if you have several)
 
     Settings and new categories live in the room's group chat.
@@ -187,6 +191,7 @@ settings-main =
     🗣 Language: { $language }
     🌍 Timezone: { $timezone }
     🌙 Quiet hours: { $quiet }
+    🔁 Repeat: { $repeat }
 quiet-off = off
 btn-settings-categories = ⏰ Categories & reminders
 btn-settings-quiet = 🌙 Quiet hours
@@ -204,6 +209,7 @@ settings-category =
 
     ⏰ Reminder time: { $time }
     📅 Days: { $days }
+    ⚖️ Queue: { $mode }
     State: { $state }
 category-state = { $active ->
     [true] ✅ enabled
@@ -282,6 +288,82 @@ cmd-description = { $command ->
     [settings] Room settings
     [members] Roommates
     [leave] Leave the room
+    [away] I'm away — skip me in queues
+    [back] Back in the queues
     [room] Pick a room
    *[help] Help
   }
+
+## Repeated reminders
+
+reminder-repeat = 🔔 Reminding you once more!
+nudge = { $variant ->
+    [0] 👀 { $name } is keeping quiet about { $emoji } { $category }. Lost signal, maybe? 📡
+    [1] 🦗 Crickets… { $name }, { $emoji } { $category } is still waiting for its hero. The buttons are in private chat 😉
+   *[2] 📣 Missing person alert: { $name } was last seen near the { $emoji } { $category } task. Reward: the eternal gratitude of the room 🙏
+  }
+btn-settings-repeat = 🔁 Repeat reminders
+settings-repeat =
+    🔁 <b>Repeat reminders</b>
+    If a reminder gets no answer, I repeat it after this many hours, and after the same time again I playfully call out in the group chat.
+btn-repeat-hours = { $hours } h
+btn-repeat-off = 🔕 Don't repeat
+repeat-value = { $hours ->
+    [0] off
+   *[other] after { $hours } h
+  }
+
+## Queue mode
+
+category-mode = { $mode ->
+    [fair] fair (whoever did less in 30 days)
+   *[round_robin] round robin
+  }
+btn-category-mode = { $mode ->
+    [fair] 🔄 Switch to round robin
+   *[round_robin] ⚖️ Switch to fair
+  }
+queue-fair = ⚖️ Last 30 days: { $counts }
+
+## Confirmations
+
+btn-vote-up = 👍{ $count ->
+    [0] {""}
+   *[other] {" "}{ $count }
+  }
+btn-vote-down = 🤨 Nope{ $count ->
+    [0] {""}
+   *[other] {" "}· { $count }
+  }
+toast-vote-saved = Vote counted 👌
+review-confirmed = ✅ Confirmed by the majority — well done, { $name }!
+review-disputed = 🤨 The majority disagrees — the record doesn't count. { $name }, looks like this turn is still ahead 😉
+duty-disputed = { $status } 🤨
+err-vote-self = You can't vote on your own record 🙂
+err-vote-closed = Voting is closed.
+err-vote-already = Your vote is already counted 🙂
+
+## Away mode
+
+away-ask = 🏖 Until when are you away? While you're away I skip you in every queue.
+btn-away-days = { $days ->
+    [1] Just today
+    [3] 3 days
+    [7] A week
+    [14] 2 weeks
+   *[other] { $days } days
+  }
+btn-away-custom = ✍️ Until a date…
+ask-away-date = Until which date (inclusive) are you away? For example: 15.10
+away-set = 🏖 { $name } is away until { $date } inclusive — skipping them in every queue. Have a good trip! 🚆
+away-set-private = 🏖 Done: skipping you in queues until { $date } inclusive. Back earlier? Use /back.
+away-status = 🏖 You're away until { $date } inclusive. Already home? Tap the button below.
+btn-back-home = 🏠 I'm back
+back-done = 🏠 { $name } is back home — back in the queues, no debts 🙂
+back-done-private = 🏠 Welcome back! You're in the queues again, no debts.
+back-not-away = You're already in the queues 🙂
+queue-away = 🏖 Away: { $names }
+queue-away-member = { $name } (until { $date })
+err-bad-date = I didn't get the date. Examples: 15.10 or 15.10.2026
+err-date-past = That date has already passed 🙂
+err-date-too-far = Too far away — { $days } days at most.

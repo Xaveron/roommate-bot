@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import re
-from datetime import time
+from datetime import date, time
 
 _TIME_RE = re.compile(r"^\s*(\d{1,2})(?:\s*[:.\-h]?\s*(\d{2}))?\s*$")
+_DAY_MONTH_RE = re.compile(r"^\s*(\d{1,2})\s*[./\-]\s*(\d{1,2})(?:\s*[./\-]\s*(\d{2}|\d{4}))?\s*$")
+_ISO_DATE_RE = re.compile(r"^\s*(\d{4})-(\d{1,2})-(\d{1,2})\s*$")
 _RANGE_SPLIT_RE = re.compile(r"\s*(?:-|–|—|\.\.|to|до|până la)\s*", re.IGNORECASE)
 
 
@@ -60,6 +62,30 @@ def split_emoji(value: str) -> tuple[str | None, str]:
     if 0 < index < len(value):
         return value[:index], value[index:].strip()
     return None, value
+
+
+def parse_date(value: str, today: date) -> date | None:
+    """Parse '15.10', '15.10.2026', '15/10/26' or '2026-10-15'.
+
+    Without a year the nearest such date that isn't in the past is meant.
+    """
+    try:
+        if match := _ISO_DATE_RE.match(value):
+            return date(int(match.group(1)), int(match.group(2)), int(match.group(3)))
+        match = _DAY_MONTH_RE.match(value)
+        if not match:
+            return None
+        day, month, year = int(match.group(1)), int(match.group(2)), match.group(3)
+        if year is not None:
+            return date(int(year) + (2000 if len(year) == 2 else 0), month, day)
+        candidate = date(today.year, month, day)
+        return candidate if candidate >= today else date(today.year + 1, month, day)
+    except ValueError:
+        return None
+
+
+def format_date(value: date) -> str:
+    return value.strftime("%d.%m.%Y")
 
 
 def format_time(value: time | None) -> str:

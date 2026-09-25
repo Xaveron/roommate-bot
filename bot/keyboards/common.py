@@ -5,9 +5,20 @@ from collections.abc import Sequence
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from bot.db.models import Assignment, AssignmentStatus, Category, Room
+from bot.db.models import Assignment, AssignmentStatus, Category, Room, Vote
 from bot.i18n import Translator
-from bot.keyboards.callbacks import DoneCb, HistoryCb, JoinCb, LeaveCb, RoomPickCb, TurnCb
+from bot.keyboards.callbacks import (
+    AwayCb,
+    DoneCb,
+    HistoryCb,
+    JoinCb,
+    LeaveCb,
+    RoomPickCb,
+    TurnCb,
+    VoteCb,
+)
+
+AWAY_PRESETS = (1, 3, 7, 14)
 
 
 def bot_link(bot_username: str, payload: str = "dm") -> str:
@@ -86,6 +97,38 @@ def history_picker(t: Translator, categories: Sequence[Category]) -> InlineKeybo
             text=t("btn-history-all"), callback_data=HistoryCb(category_id=0).pack()
         )
     )
+    return builder.as_markup()
+
+
+def vote_keyboard(t: Translator, duty_id: int, up: int = 0, down: int = 0) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(
+        text=t("btn-vote-up", count=up), callback_data=VoteCb(duty_id=duty_id, vote=Vote.UP)
+    )
+    builder.button(
+        text=t("btn-vote-down", count=down),
+        callback_data=VoteCb(duty_id=duty_id, vote=Vote.DOWN),
+    )
+    return builder.as_markup()
+
+
+def away_keyboard(t: Translator, user_id: int) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for days in AWAY_PRESETS:
+        builder.button(
+            text=t("btn-away-days", days=days),
+            callback_data=AwayCb(action="days", user_id=user_id, value=days),
+        )
+    builder.button(
+        text=t("btn-away-custom"), callback_data=AwayCb(action="custom", user_id=user_id)
+    )
+    builder.adjust(2, 2, 1)
+    return builder.as_markup()
+
+
+def back_home_keyboard(t: Translator, user_id: int) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(text=t("btn-back-home"), callback_data=AwayCb(action="back", user_id=user_id))
     return builder.as_markup()
 
 

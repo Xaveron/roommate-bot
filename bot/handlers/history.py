@@ -8,7 +8,7 @@ from aiogram.filters import Command, CommandObject
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.db.models import Room
+from bot.db.models import ReviewStatus, Room
 from bot.handlers.common import answer_long, split_long
 from bot.i18n import Translator
 from bot.keyboards.callbacks import HistoryCb
@@ -30,12 +30,14 @@ def render_history(t: Translator, room: Room, history: CategoryHistory) -> str:
         [
             local_now(room.timezone, duty.created_at).strftime("%d.%m %H:%M"),
             duty.member.display_name,
-            t("duty-status", status=duty.status),
+            t("duty-status", status=duty.status)
+            if duty.review != ReviewStatus.DISPUTED
+            else t("duty-disputed", status=t("duty-status", status=duty.status)),
         ]
         for duty in history.duties
     ]
     headers = [t("history-col-date"), t("history-col-who"), t("history-col-status")]
-    table = render_table(headers, rows, max_widths=[11, 12, 20])
+    table = render_table(headers, rows, max_widths=[11, 12, 24])
     return f"{title}\n<pre>{esc(table)}</pre>"
 
 

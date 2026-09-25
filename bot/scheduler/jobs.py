@@ -8,7 +8,7 @@ from bot.db import Database
 from bot.db.repositories import RoomRepo
 from bot.notifications import Notifier
 from bot.services.clock import utcnow
-from bot.services.reminders import ReminderService
+from bot.services.reminders import DeliveryKind, ReminderService
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +29,11 @@ async def reminder_tick(db: Database, notifier: Notifier) -> None:
                 room = await RoomRepo(session).get(room_id)
                 if room is None:
                     continue
-                for assignment in await ReminderService(session).plan_room(room, now):
-                    await notifier.deliver_reminder(assignment, now)
+                for delivery in await ReminderService(session).plan_room(room, now):
+                    if delivery.kind == DeliveryKind.NUDGE:
+                        await notifier.nudge(delivery.assignment, now)
+                    else:
+                        await notifier.deliver_reminder(delivery.assignment, now)
                 await session.commit()
         except Exception:
             logger.exception("Reminder tick failed for room %s", room_id)

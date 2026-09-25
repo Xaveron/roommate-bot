@@ -14,6 +14,8 @@ from bot.services.clock import is_valid_timezone
 from bot.services.errors import ServiceError
 from bot.services.queue import QueueService
 
+MAX_REPEAT_HOURS = 24
+
 # kind, emoji, reminder time
 DEFAULT_CATEGORIES: tuple[tuple[CategoryKind, str, time], ...] = (
     (CategoryKind.BREAD, "🍞", time(18, 0)),
@@ -128,6 +130,12 @@ class RoomService:
         if (start is None) != (end is None):
             raise ServiceError("err-bad-time-range")
         room.quiet_hours_start, room.quiet_hours_end = start, end
+        await self.session.flush()
+
+    async def set_repeat_hours(self, room: Room, hours: int) -> None:
+        if not 0 <= hours <= MAX_REPEAT_HOURS:
+            raise ServiceError("err-generic")
+        room.repeat_after_hours = hours
         await self.session.flush()
 
     async def migrate_chat(self, old_chat_id: int, new_chat_id: int) -> Room | None:

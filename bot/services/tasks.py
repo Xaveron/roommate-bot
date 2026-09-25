@@ -36,6 +36,8 @@ class Completion:
     assignment: Assignment | None = None
     # Somebody else's open assignment closed because the chore was done out of turn.
     covered: Assignment | None = None
+    # How many roommates may confirm or dispute the record (everybody but the performer).
+    voters: int = 0
 
 
 @dataclass(slots=True)
@@ -192,6 +194,7 @@ class TaskService:
         # The chore is covered for today: no scheduled reminder for the next person today.
         category.last_reminded_on = today
         await self.session.flush()
+        roommates = await self.members.list(category.room_id)
         return Completion(
             category=category,
             member=member,
@@ -199,4 +202,5 @@ class TaskService:
             in_turn=in_turn,
             next_member=await self.queue.current(category, today),
             assignment=assignment,
+            voters=sum(1 for m in roommates if m.id != member.id),
         )

@@ -41,10 +41,9 @@ from aiogram.types import (
 from bot.config import Settings
 from bot.db import Database
 from bot.db.models import AssignmentStatus
-from bot.db.repositories import AssignmentRepo, CategoryRepo, RoomRepo
-from bot.handlers import admin, errors, history, queue, settings, start, tasks
+from bot.db.repositories import AssignmentRepo, CategoryRepo, QueueRepo, RoomRepo
 from bot.i18n import I18n
-from bot.keyboards.callbacks import HistoryCb, JoinCb, TurnCb
+from bot.keyboards.callbacks import HistoryCb, JoinCb, SettingsCb, TurnCb
 from bot.main import build_dispatcher
 from bot.notifications import Notifier
 from bot.scheduler import jobs
@@ -168,11 +167,13 @@ class Harness:
 
 @pytest.fixture
 async def harness(db: Database) -> AsyncGenerator[Harness, None]:
-    yield Harness(db)
+    harness = Harness(db)
+    yield harness
     # Handler routers are module-level singletons: detach them so the next test can
     # build a fresh dispatcher.
-    for module in (admin, errors, history, queue, settings, start, tasks):
-        module.router._parent_router = None
+    for root in harness.dp.sub_routers:
+        for router in root.sub_routers:
+            router._parent_router = None
 
 
 def private(user: User) -> Chat:
@@ -295,3 +296,53 @@ async def test_commands_menu_is_registered(harness: Harness):
     menus = harness.session.of(SetMyCommands)
     assert {m.language_code for m in menus} == {None, "ru", "ro"}
     assert all(c.description for m in menus for c in m.commands)
+
+
+async def test_stage_two_flow(harness: Harness, db: Database):
+    h = harness
+    await h.message(ANYA, "/start")
+    await h.press(ANYA, JoinCb().pack())
+    await h.press(BORYA, JoinCb().pack())
+
+    # /done in the group: the announcement carries 👍 / 🤨.
+    await h.message(ANYA, "/done хлеб")
+    announcement = h.session.sent(GROUP.id)[-1]
+    buttons = announcement.reply_markup.inline_keyboard[0]
+    assert [b.text for b in buttons] == ["👍", "🤨 А вот и нет"]
+    down = buttons[1].callback_data
+
+    # The performer can't vote; Borya is the only other roommate, so his 🤨 decides.
+    await h.press(ANYA, down)
+    assert h.alerts()[-1] == "За себя голосовать нельзя 🙂"
+    await h.press(BORYA, down)
+    assert "Большинство против" in h.session.of(EditMessageText)[-1].text
+    async with db.session() as session:
+        room = await RoomRepo(session).get_by_chat_id(GROUP.id)
+        category = (await CategoryRepo(session).list(room.id))[0]  # type: ignore[union-attr]
+        state = await QueueRepo(session).get(category.id, 1)  # Anya's member id is 1
+        assert state is not None and state.skip_debt == 1
+
+    # /away with a preset button, then /queue shows it, then /back.
+    await h.message(BORYA, "/away")
+    away_buttons = h.session.sent(GROUP.id)[-1].reply_markup.inline_keyboard
+    week = next(b for row in away_buttons for b in row if b.text == "Неделю")
+    await h.press(ANYA, week.callback_data)
+    assert h.alerts()[-1] == "Эта кнопка не для тебя 🙂"
+    await h.press(BORYA, week.callback_data)
+    assert "в отъезде до" in h.session.of(EditMessageText)[-1].text
+    await h.message(ANYA, "/queue")
+    assert "🏖 В отъезде: Боря" in h.session.sent(GROUP.id)[-1].text
+    await h.message(BORYA, "/back")
+    assert "снова дома" in h.session.sent(GROUP.id)[-1].text
+
+    # Settings: repeat interval and queue mode.
+    await h.message(ANYA, "/settings")
+    await h.press(ANYA, SettingsCb(action="repeat").pack())
+    await h.press(ANYA, SettingsCb(action="setrepeat", value="2").pack())
+    assert "🔁 Повтор: через 2 ч" in h.session.of(EditMessageText)[-1].text
+    await h.press(ANYA, SettingsCb(action="mode", category_id=category.id).pack())
+    assert "справедливая" in h.session.of(EditMessageText)[-1].text
+    await h.message(ANYA, "/queue")
+    assert "⚖️ За 30 дней" in h.session.sent(GROUP.id)[-1].text
+
+    assert not [r for r in h.session.sent() if "Что-то пошло не так" in r.text]

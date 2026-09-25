@@ -5,19 +5,23 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping
 
-from aiogram import Bot
+from aiogram import Bot, F
 from aiogram.enums import ChatMemberStatus, ChatType
 from aiogram.exceptions import TelegramAPIError
-from aiogram.types import Chat, Message
+from aiogram.types import Chat, InlineKeyboardMarkup, Message
 
 from bot.db.models import CategoryKind, Member, Room
 from bot.i18n import I18n, Translator
+from bot.keyboards.common import vote_keyboard
 from bot.services.tasks import Completion
 from bot.utils.text import bold, esc
 
 logger = logging.getLogger(__name__)
 
 MAX_MESSAGE_LENGTH = 4000
+
+# Free-text answers to a pending question (commands keep working while a question is pending).
+ANSWER = F.text & ~F.text.startswith("/")
 
 
 def is_group(chat: Chat | None) -> bool:
@@ -62,6 +66,11 @@ def completion_text(t: Translator, completion: Completion) -> str:
     if completion.next_member is not None:
         lines.append(t("group-next", name=bold(completion.next_member.display_name)))
     return "\n".join(lines)
+
+
+def completion_markup(t: Translator, completion: Completion) -> InlineKeyboardMarkup | None:
+    """👍 / 🤨 buttons, unless nobody else lives in the room."""
+    return vote_keyboard(t, completion.duty.id) if completion.voters > 0 else None
 
 
 def split_long(text: str, limit: int = MAX_MESSAGE_LENGTH) -> list[str]:

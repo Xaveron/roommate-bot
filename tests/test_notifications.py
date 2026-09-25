@@ -66,3 +66,21 @@ async def test_reminder_falls_back_to_group_when_dm_is_impossible(session):
     assert urls == ["https://t.me/roommate_test_bot?start=dm"]
     assert not anya.user.dm_available
     assert assignment.message_chat_id == room.chat_id
+
+
+async def test_repeated_reminder_and_group_nudge(session):
+    room, (anya, _, _) = await make_room(session)
+    bot = FakeBot(blocked=set())
+    notifier = Notifier(bot, I18n())  # type: ignore[arg-type]
+    assignment, *_ = await plan(session, room, "2026-09-25 18:00")
+
+    await notifier.deliver_reminder(assignment, at("2026-09-25 21:00"))
+    assert bot.sent[-1]["text"].startswith("🔔 Напоминаю ещё раз!")
+    assert assignment.reminders_sent == 2
+
+    await notifier.nudge(assignment, at("2026-09-26 00:00"))
+    nudge = bot.sent[-1]
+    assert nudge["chat_id"] == room.chat_id
+    assert f"tg://user?id={anya.telegram_user_id}" in nudge["text"]
+    assert assignment.category.name in nudge["text"]
+    assert assignment.reminders_sent == 3

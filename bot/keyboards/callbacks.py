@@ -30,6 +30,21 @@ class HistoryCb(CallbackData, prefix="hist"):
     category_id: int  # 0 = all categories
 
 
+class VoteCb(CallbackData, prefix="vote"):
+    """👍 / 🤨 under a completion announcement. vote: up | down."""
+
+    duty_id: int
+    vote: str
+
+
+class AwayCb(CallbackData, prefix="away"):
+    """action: days (value = number of days) | custom | back."""
+
+    action: str
+    user_id: int
+    value: int = 0
+
+
 class RoomPickCb(CallbackData, prefix="room"):
     room_id: int
 

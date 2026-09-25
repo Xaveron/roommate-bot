@@ -26,9 +26,17 @@ from bot.utils.text import bold, esc, mention
 logger = logging.getLogger(__name__)
 
 
-def reminder_text(t: Translator, assignment: Assignment, *, with_room: bool = True) -> str:
+NUDGE_VARIANTS = 3
+
+
+def reminder_text(
+    t: Translator, assignment: Assignment, *, with_room: bool = True, repeat: bool = False
+) -> str:
     category = assignment.category
-    lines = [t("reminder-text", kind=category.kind, emoji=category.emoji, name=esc(category.name))]
+    lines = [t("reminder-repeat")] if repeat else []
+    lines.append(
+        t("reminder-text", kind=category.kind, emoji=category.emoji, name=esc(category.name))
+    )
     if with_room:
         lines.append(t("reminder-room", room=esc(category.room.name)))
     if assignment.status == AssignmentStatus.ACCEPTED:
@@ -72,12 +80,15 @@ class Notifier:
         room = assignment.category.room
         t = self.translator(room)
         user = assignment.member.user
+        repeat = assignment.reminders_sent > 0
         await self.strip_buttons(assignment)
 
         message: Message | None = None
         try:
             message = await self.bot.send_message(
-                user.id, reminder_text(t, assignment), reply_markup=turn_keyboard(t, assignment)
+                user.id,
+                reminder_text(t, assignment, repeat=repeat),
+                reply_markup=turn_keyboard(t, assignment),
             )
             user.dm_available = True
         except (TelegramForbiddenError, TelegramBadRequest) as exc:
@@ -90,7 +101,7 @@ class Notifier:
             text = t(
                 "reminder-group-fallback",
                 mention=mention(user.id, user.display_name),
-                text=reminder_text(t, assignment, with_room=False),
+                text=reminder_text(t, assignment, with_room=False, repeat=repeat),
             )
             message = await self.send_group(
                 room,
@@ -103,6 +114,21 @@ class Notifier:
             message.chat.id if message else None,
             message.message_id if message else None,
         )
+
+    async def nudge(self, assignment: Assignment, now: datetime) -> None:
+        """Friendly public poke after the member ignored two reminders."""
+        category = assignment.category
+        t = self.translator(category.room)
+        user = assignment.member.user
+        text = t(
+            "nudge",
+            variant=assignment.id % NUDGE_VARIANTS,
+            name=mention(user.id, user.display_name),
+            emoji=category.emoji,
+            category=esc(category.name),
+        )
+        await self.send_group(category.room, text)
+        ReminderService.mark_nudged(assignment, now)
 
     async def strip_buttons(self, assignment: Assignment) -> None:
         """Remove the buttons from the previous reminder message, if any."""

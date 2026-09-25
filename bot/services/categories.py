@@ -13,9 +13,10 @@ from bot.db.models import (
     AssignmentStatus,
     Category,
     CategoryKind,
+    QueueMode,
     Room,
 )
-from bot.db.repositories import AssignmentRepo, CategoryRepo
+from bot.db.repositories import AssignmentRepo, CategoryRepo, QueueRepo
 from bot.services.errors import ServiceError
 from bot.services.queue import QueueService
 
@@ -101,6 +102,13 @@ class CategoryService:
         if not days:
             raise ServiceError("err-no-days")
         category.reminder_days = "".join(sorted(days))
+        await self.session.flush()
+
+    async def toggle_queue_mode(self, category: Category) -> None:
+        """Switch round robin <-> fair. Debts and credits start from scratch."""
+        is_fair = category.queue_mode == QueueMode.FAIR
+        category.queue_mode = QueueMode.ROUND_ROBIN if is_fair else QueueMode.FAIR
+        await QueueRepo(self.session).reset_balances(category_id=category.id)
         await self.session.flush()
 
     async def set_every_day(self, category: Category) -> None:

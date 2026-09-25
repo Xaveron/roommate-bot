@@ -1,6 +1,6 @@
 from aiogram import Router
 
-from bot.handlers import admin, errors, history, queue, settings, start, tasks
+from bot.handlers import admin, away, errors, history, queue, reviews, settings, start, tasks
 
 
 def build_router() -> Router:
@@ -9,8 +9,10 @@ def build_router() -> Router:
         errors.router,
         admin.router,
         settings.router,  # FSM answers must be matched before anything else
+        away.router,
         start.router,
         tasks.router,
+        reviews.router,
         queue.router,
         history.router,
     )

@@ -1,13 +1,21 @@
 """Decides which reminders have to be delivered right now.
 
 A scheduler tick calls :meth:`ReminderService.plan_room` for every room. The planner creates or
-updates assignments and returns those whose reminder must be (re)delivered; the Telegram layer
-sends them and calls :meth:`ReminderService.mark_delivered`.
+updates assignments and returns what must be sent; the Telegram layer sends it and calls
+:meth:`ReminderService.mark_delivered` / :meth:`ReminderService.mark_nudged`.
+
+Escalation of an unanswered ("pending") reminder, with N = ``Room.repeat_after_hours``:
+
+1. the reminder itself;
+2. after N hours without an answer, the same reminder once more;
+3. after another N hours, a friendly nudge in the group chat. Then silence until tomorrow.
 """
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta
+from enum import StrEnum
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +25,21 @@ from bot.services.clock import is_quiet, local_now
 from bot.services.tasks import TaskService
 
 S = AssignmentStatus
+
+# reminders_sent values: 1 = first reminder, 2 = repeated once, 3 = group nudge posted.
+REPEAT_REMINDER_AT = 1
+NUDGE_AT = 2
+
+
+class DeliveryKind(StrEnum):
+    REMINDER = "reminder"  # (repeated) reminder to the member
+    NUDGE = "nudge"  # "X is keeping quiet about bread" in the group chat
+
+
+@dataclass(slots=True)
+class Delivery:
+    assignment: Assignment
+    kind: DeliveryKind = DeliveryKind.REMINDER
 
 
 def is_reminder_day(days: str, day: date) -> bool:
@@ -50,19 +73,46 @@ class ReminderService:
         self.categories = CategoryRepo(session)
         self.tasks = TaskService(session)
 
-    async def plan_room(self, room: Room, now: datetime) -> list[Assignment]:
-        """Assignments whose reminder must be delivered now (empty during quiet hours)."""
+    async def plan_room(self, room: Room, now: datetime) -> list[Delivery]:
+        """What must be delivered now (nothing during quiet hours)."""
         if not room.is_active or room_is_quiet(room, now):
             return []
         moment = local_now(room.timezone, now)
-        due: list[Assignment] = []
+        due: list[Delivery] = []
         for category in await self.categories.list(room.id, active_only=True):
-            assignment = await self._plan_category(category, moment, now)
-            if assignment is not None:
-                due.append(assignment)
+            delivery = await self._plan_category(room, category, moment, now)
+            if delivery is not None:
+                due.append(delivery)
         return due
 
     async def _plan_category(
+        self, room: Room, category: Category, moment: datetime, now: datetime
+    ) -> Delivery | None:
+        assignment = await self._plan_assignment(category, moment, now)
+        if assignment is not None:
+            return Delivery(assignment)
+        return await self._plan_escalation(room, category, now)
+
+    async def _plan_escalation(
+        self, room: Room, category: Category, now: datetime
+    ) -> Delivery | None:
+        """Repeat an unanswered reminder, then nudge the member in the group chat."""
+        assignment = await self.assignments.get_open(category.id)
+        if (
+            assignment is None
+            or assignment.status != S.PENDING
+            or assignment.last_reminded_at is None
+            or room.repeat_after_hours <= 0
+            or now - assignment.last_reminded_at < timedelta(hours=room.repeat_after_hours)
+        ):
+            return None
+        if assignment.reminders_sent == REPEAT_REMINDER_AT:
+            return Delivery(assignment, DeliveryKind.REMINDER)
+        if assignment.reminders_sent == NUDGE_AT:
+            return Delivery(assignment, DeliveryKind.NUDGE)
+        return None
+
+    async def _plan_assignment(
         self, category: Category, moment: datetime, now: datetime
     ) -> Assignment | None:
         today = moment.date()
@@ -121,3 +171,8 @@ class ReminderService:
         assignment.reminders_sent += 1
         assignment.message_chat_id = chat_id
         assignment.message_id = message_id
+
+    @staticmethod
+    def mark_nudged(assignment: Assignment, now: datetime) -> None:
+        assignment.last_reminded_at = now
+        assignment.reminders_sent += 1

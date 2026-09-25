@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 from bot.services.queue import (
+    FairStats,
     QueueEntry,
     apply_completion,
+    apply_dispute,
     apply_out_of_turn,
     apply_skip,
     pick_next,
+    presence_days,
     upcoming,
 )
 
@@ -126,3 +131,82 @@ def test_positions_stay_compact():
     entries = make(A, B, C, D)
     run(entries, 25)
     assert sorted(e.position for e in entries) == [0, 1, 2, 3]
+
+
+# --- fair mode ------------------------------------------------------------------------
+
+
+def fair(counts: dict[int, int], presence: dict[int, int] | None = None) -> FairStats:
+    return FairStats(counts=counts, presence=presence or {})
+
+
+def test_fair_picks_whoever_did_least():
+    entries = make(A, B, C)
+    assert pick_next(entries, stats=fair({A: 5, B: 2, C: 3})) == B
+
+
+def test_fair_ties_follow_queue_order():
+    entries = make(A, B, C)
+    assert pick_next(entries, stats=fair({A: 2, B: 1, C: 1})) == B
+    apply_completion(entries, B, fair=True)
+    # B moved to the end, so among equal counts C now comes before B.
+    assert pick_next(entries, stats=fair({A: 2, B: 1, C: 1})) == C
+
+
+def test_fair_normalizes_by_presence():
+    entries = make(A, B, C)
+    # C was here only 10 of 30 days and did 4: that's more often than A (10/30) and B (9/30).
+    stats = fair({A: 10, B: 9, C: 4}, {A: 30, B: 30, C: 10})
+    assert pick_next(entries, stats=stats) == B
+
+
+def test_fair_ignores_debts_and_credits():
+    entries = make(A, B, C)
+    apply_skip(entries, A, fair=True)
+    apply_out_of_turn(entries, C, fair=True)
+    assert all(e.skip_debt == 0 and e.credit == 0 for e in entries)
+    entry(entries, B).skip_debt = 3  # leftovers from round robin don't matter either
+    assert pick_next(entries, stats=fair({A: 0, B: 1, C: 1})) == A
+
+
+def test_fair_upcoming_simulates_counts():
+    entries = make(A, B, C)
+    stats = fair({A: 2, B: 0, C: 1})
+    # B catches up first; equal counts are broken by the round-robin order.
+    assert upcoming(entries, pick_next(entries, stats=stats), 5, stats) == [B, C, B, A, C]
+    assert stats.counts == {A: 2, B: 0, C: 1}  # not mutated
+
+
+def test_dispute_takes_back_round_robin_effects():
+    entries = make(A, B, C)
+    apply_completion(entries, A)
+    apply_dispute(entries, A, in_turn=True)
+    assert entry(entries, A).skip_debt == 1
+    assert pick_next(entries) == A
+
+    entries = make(A, B, C)
+    apply_out_of_turn(entries, C)
+    apply_dispute(entries, C, in_turn=False)
+    assert entry(entries, C).credit == 0 and entry(entries, C).skip_debt == 0
+
+    entries = make(A, B, C)
+    apply_out_of_turn(entries, A)  # credit spent right away: A was first
+    apply_dispute(entries, A, in_turn=False)
+    assert entry(entries, A).skip_debt == 1
+
+    entries = make(A, B)
+    apply_completion(entries, A, fair=True)
+    apply_dispute(entries, A, in_turn=True, fair=True)
+    assert entry(entries, A).skip_debt == 0
+    assert pick_next(entries, stats=fair({A: 0, B: 0})) == A
+
+
+def test_presence_days():
+    today = date(2026, 9, 30)
+    window = date(2026, 9, 1)
+    assert presence_days(window, today, date(2025, 1, 1), []) == 30
+    assert presence_days(window, today, date(2026, 9, 21), []) == 10
+    away = [(date(2026, 9, 10), date(2026, 9, 19))]
+    assert presence_days(window, today, date(2025, 1, 1), away) == 20
+    assert presence_days(window, today, date(2026, 10, 5), []) == 1
+    assert presence_days(window, today, date(2025, 1, 1), [(window, today)]) == 1

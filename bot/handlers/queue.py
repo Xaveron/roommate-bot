@@ -8,12 +8,14 @@ from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.models import AssignmentStatus, Member, Room
-from bot.db.repositories import AssignmentRepo
+from bot.db.repositories import AssignmentRepo, MemberRepo
 from bot.handlers.common import answer_long
 from bot.i18n import Translator
+from bot.services.away import is_away
 from bot.services.categories import CategoryService
 from bot.services.clock import local_date, utcnow
 from bot.services.queue import QueueEntry, QueueService
+from bot.utils.parsing import format_date
 from bot.utils.text import bold, esc
 
 router = Router(name="queue")
@@ -42,6 +44,13 @@ async def render_queue(session: AsyncSession, room: Room, t: Translator) -> str:
             exclude=await assignments.declined_member_ids(category.id, today),
         )
         lines = [bold(category.title)]
+        if snapshot.stats is not None:
+            counts = " · ".join(
+                f"{esc(m.display_name)} {snapshot.stats.counts.get(m.id, 0)}"
+                for m in [snapshot.current, *snapshot.upcoming]
+                if m is not None
+            )
+            lines.append(t("queue-fair", counts=counts))
         if snapshot.current is None:
             lines.append(t("queue-nobody"))
             blocks.append("\n".join(lines))
@@ -70,6 +79,17 @@ async def render_queue(session: AsyncSession, room: Room, t: Translator) -> str:
 
     if len(blocks) == 1:
         blocks.append(t("err-no-categories"))
+    away = [
+        (member, member.away_until)
+        for member in await MemberRepo(session).list(room.id)
+        if member.away_until is not None and is_away(member, today)
+    ]
+    if away:
+        names = ", ".join(
+            t("queue-away-member", name=esc(member.display_name), date=format_date(until))
+            for member, until in away
+        )
+        blocks.append(t("queue-away", names=names))
     if uses_marks:
         blocks.append(t("queue-legend"))
     return "\n\n".join(blocks)

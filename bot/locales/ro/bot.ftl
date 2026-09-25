@@ -80,10 +80,13 @@ help-group =
     /history — istoricul pe categorii
     /add_category — adaugă o categorie proprie
     /settings — ora mementourilor, ore de liniște, fus orar, limbă (pentru admini)
+    /away — plec: sări-mă în rânduri până la o dată
+    /back — revin în rânduri
     /members — cine locuiește în cameră
     /leave — ieși din cameră
     /cancel — anulează introducerea
 
+    Sub mesajul despre o sarcină făcută sunt butoanele 👍 și 🤨: dacă majoritatea e împotrivă, înregistrarea nu se pune.
     Mementourile vin în privat — scrie-mi și apasă „Start”.
 help-private =
     <b>RoomMate Bot</b>
@@ -92,6 +95,7 @@ help-private =
     /queue — cine e la rând
     /done — marchează o sarcină făcută
     /history — istoric
+    /away și /back — plec / am revenit acasă
     /room — alege camera (dacă ai mai multe)
 
     Setările și categoriile noi — în grupul camerei.
@@ -187,6 +191,7 @@ settings-main =
     🗣 Limba: { $language }
     🌍 Fus orar: { $timezone }
     🌙 Ore de liniște: { $quiet }
+    🔁 Repetare: { $repeat }
 quiet-off = dezactivate
 btn-settings-categories = ⏰ Categorii și mementouri
 btn-settings-quiet = 🌙 Ore de liniște
@@ -204,6 +209,7 @@ settings-category =
 
     ⏰ Ora mementoului: { $time }
     📅 Zile: { $days }
+    ⚖️ Rând: { $mode }
     Stare: { $state }
 category-state = { $active ->
     [true] ✅ activă
@@ -282,6 +288,82 @@ cmd-description = { $command ->
     [settings] Setările camerei
     [members] Locatarii camerei
     [leave] Ieși din cameră
+    [away] Plec — sări-mă în rânduri
+    [back] Revin în rânduri
     [room] Alege camera
    *[help] Ajutor
   }
+
+## Repetarea mementourilor
+
+reminder-repeat = 🔔 Îți amintesc încă o dată!
+nudge = { $variant ->
+    [0] 👀 { $name } încă tace despre { $emoji } { $category }. Poate s-a pierdut semnalul? 📡
+    [1] 🦗 Liniște… { $name }, { $emoji } { $category } încă își așteaptă eroul. Butoanele sunt în privat 😉
+   *[2] 📣 Căutăm pe { $name }! Ultima dată era aproape de sarcina { $emoji } { $category }. Recompensă: recunoștința veșnică a camerei 🙏
+  }
+btn-settings-repeat = 🔁 Repetarea mementourilor
+settings-repeat =
+    🔁 <b>Repetarea mementourilor</b>
+    Dacă nu vine niciun răspuns, după atâtea ore amintesc încă o dată, iar după încă atâtea — chem în glumă în grup.
+btn-repeat-hours = { $hours } h
+btn-repeat-off = 🔕 Nu repeta
+repeat-value = { $hours ->
+    [0] dezactivată
+   *[other] după { $hours } h
+  }
+
+## Modul rândului
+
+category-mode = { $mode ->
+    [fair] echitabil (cine a făcut mai puțin în 30 de zile)
+   *[round_robin] pe rând
+  }
+btn-category-mode = { $mode ->
+    [fair] 🔄 Treci la „pe rând”
+   *[round_robin] ⚖️ Treci la „echitabil”
+  }
+queue-fair = ⚖️ În 30 de zile: { $counts }
+
+## Confirmări
+
+btn-vote-up = 👍{ $count ->
+    [0] {""}
+   *[other] {" "}{ $count }
+  }
+btn-vote-down = 🤨 Ba nu{ $count ->
+    [0] {""}
+   *[other] {" "}· { $count }
+  }
+toast-vote-saved = Vot înregistrat 👌
+review-confirmed = ✅ Confirmat de majoritate — bravo, { $name }!
+review-disputed = 🤨 Majoritatea e împotrivă — înregistrarea nu se pune. { $name }, se pare că tura asta mai e de făcut 😉
+duty-disputed = { $status } 🤨
+err-vote-self = Nu poți vota pentru tine 🙂
+err-vote-closed = Votul s-a încheiat.
+err-vote-already = Votul tău e deja înregistrat 🙂
+
+## Plecare
+
+away-ask = 🏖 Până când lipsești? Cât timp lipsești, te sar în toate rândurile.
+btn-away-days = { $days ->
+    [1] Doar azi
+    [3] 3 zile
+    [7] O săptămână
+    [14] 2 săptămâni
+   *[other] { $days } zile
+  }
+btn-away-custom = ✍️ Până la o dată…
+ask-away-date = Până la ce dată (inclusiv) lipsești? De exemplu: 15.10
+away-set = 🏖 { $name } lipsește până pe { $date } inclusiv — sar peste în toate rândurile. Drum bun! 🚆
+away-set-private = 🏖 Gata: te sar în rânduri până pe { $date } inclusiv. Dacă revii mai devreme — /back.
+away-status = 🏖 Lipsești până pe { $date } inclusiv. Ești deja acasă? Apasă butonul de mai jos.
+btn-back-home = 🏠 Sunt acasă
+back-done = 🏠 { $name } e din nou acasă — revine în rânduri, fără datorii 🙂
+back-done-private = 🏠 Bine ai revenit! Ești din nou în rânduri, fără datorii.
+back-not-away = Ești deja în rânduri 🙂
+queue-away = 🏖 Lipsesc: { $names }
+queue-away-member = { $name } (până pe { $date })
+err-bad-date = Nu am înțeles data. Exemple: 15.10 sau 15.10.2026
+err-date-past = Data asta a trecut deja 🙂
+err-date-too-far = Prea departe — maximum { $days } de zile.

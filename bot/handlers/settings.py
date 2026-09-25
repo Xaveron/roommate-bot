@@ -9,7 +9,7 @@ from __future__ import annotations
 from contextlib import suppress
 from typing import Any
 
-from aiogram import Bot, F, Router
+from aiogram import Bot, Router
 from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command, CommandObject, StateFilter
 from aiogram.fsm.context import FSMContext
@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.config import SUPPORTED_LANGUAGES
 from bot.db.models import Category, Room
 from bot.db.repositories import CategoryRepo, MemberRepo
-from bot.handlers.common import can_manage, default_category_names
+from bot.handlers.common import ANSWER, can_manage, default_category_names
 from bot.i18n import I18n, Translator
 from bot.keyboards import settings as kb
 from bot.keyboards.callbacks import SettingsCb
@@ -38,9 +38,6 @@ from bot.utils.parsing import (
 from bot.utils.text import bold, esc, mention
 
 router = Router(name="settings")
-
-# Free-text answers only: commands keep working while a question is pending.
-ANSWER = F.text & ~F.text.startswith("/")
 
 
 class AddCategory(StatesGroup):
@@ -75,6 +72,7 @@ def main_text(t: Translator, room: Room) -> str:
         language=t("language-name", code=room.language),
         timezone=room.timezone,
         quiet=quiet,
+        repeat=t("repeat-value", hours=room.repeat_after_hours),
     )
 
 
@@ -85,6 +83,7 @@ def category_text(t: Translator, category: Category) -> str:
         time=format_time(category.reminder_time),
         days=_days_text(t, category.reminder_days),
         state=t("category-state", active=str(category.is_active).lower()),
+        mode=t("category-mode", mode=category.queue_mode),
     )
 
 
@@ -270,6 +269,9 @@ async def on_settings(
             case "alldays" if category:
                 await categories.set_every_day(category)
                 await _show(callback, category_text(t, category), kb.days_menu(t, category))
+            case "mode" if category:
+                await categories.toggle_queue_mode(category)
+                await _show(callback, category_text(t, category), kb.category_menu(t, category))
             case "toggle" if category:
                 await categories.set_active(category, not category.is_active, utcnow())
                 await _show(callback, category_text(t, category), kb.category_menu(t, category))
@@ -291,6 +293,13 @@ async def on_settings(
                 return
             case "addcat":
                 await _ask(callback, state, AddCategory.name, t("add-category-ask-name"))
+            case "repeat":
+                await _show(
+                    callback, t("settings-repeat"), kb.repeat_menu(t, room.repeat_after_hours)
+                )
+            case "setrepeat":
+                await rooms.set_repeat_hours(room, int(value))
+                await _show(callback, main_text(t, room), kb.main_menu(t))
             case "quiet":
                 await _show(callback, t("settings-quiet"), kb.quiet_menu(t))
             case "setquiet":

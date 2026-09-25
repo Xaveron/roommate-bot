@@ -42,12 +42,15 @@ async def session(db: Database) -> AsyncIterator[AsyncSession]:
 
 
 async def make_room(
-    session: AsyncSession, members: int = 3, now: datetime | None = None
+    session: AsyncSession,
+    members: int = 3,
+    now: datetime | None = None,
+    chat_id: int = -1001,
 ) -> tuple[Room, list[Member]]:
     now = now or at("2026-09-25 10:00")
     service = RoomService(session)
     room, _ = await service.get_or_create(
-        chat_id=-1001,
+        chat_id=chat_id,
         title="906B",
         created_by=1,
         language="ru",
@@ -57,7 +60,8 @@ async def make_room(
     )
     result = []
     for index, name in enumerate(PEOPLE[:members], start=1):
-        user = await UserRepo(session).upsert(user_id=index, first_name=name)
+        user_id = index if chat_id == -1001 else abs(chat_id) * 10 + index
+        user = await UserRepo(session).upsert(user_id=user_id, first_name=name)
         member, _ = await service.join(room, user, now)
         result.append(member)
     return room, result

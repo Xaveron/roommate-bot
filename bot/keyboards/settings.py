@@ -19,6 +19,7 @@ QUIET_PRESETS = (
     (time(23), time(9)),
     (time(0), time(8)),
 )
+REPEAT_PRESETS = (1, 2, 3, 4, 6, 8)
 TIMEZONE_PRESETS = (
     "Europe/Chisinau",
     "Europe/Bucharest",
@@ -42,12 +43,13 @@ def _back(builder: InlineKeyboardBuilder, t: Translator, action: str, category_i
 def main_menu(t: Translator) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text=t("btn-settings-categories"), callback_data=_cb("cats"))
+    builder.button(text=t("btn-settings-repeat"), callback_data=_cb("repeat"))
     builder.button(text=t("btn-settings-quiet"), callback_data=_cb("quiet"))
     builder.button(text=t("btn-settings-timezone"), callback_data=_cb("tz"))
     builder.button(text=t("btn-settings-language"), callback_data=_cb("lang"))
     builder.button(text=t("btn-settings-members"), callback_data=_cb("members"))
     builder.button(text=t("btn-close"), callback_data=_cb("close"))
-    builder.adjust(1, 2, 2, 1)
+    builder.adjust(1, 2, 2, 1, 1)
     return builder.as_markup()
 
 
@@ -69,11 +71,15 @@ def category_menu(t: Translator, category: Category) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text=t("btn-category-time"), callback_data=_cb("time", category.id))
     builder.button(text=t("btn-category-days"), callback_data=_cb("days", category.id))
+    builder.button(
+        text=t("btn-category-mode", mode=category.queue_mode),
+        callback_data=_cb("mode", category.id),
+    )
     toggle_key = "btn-category-disable" if category.is_active else "btn-category-enable"
     builder.button(text=t(toggle_key), callback_data=_cb("toggle", category.id))
     builder.button(text=t("btn-category-delete"), callback_data=_cb("del", category.id))
     _back(builder, t, "cats")
-    builder.adjust(2, 2, 1)
+    builder.adjust(2, 1, 2, 1)
     return builder.as_markup()
 
 
@@ -110,6 +116,21 @@ def delete_confirm_menu(t: Translator, category: Category) -> InlineKeyboardMark
     builder.button(text=t("btn-delete-confirm"), callback_data=_cb("delok", category.id))
     _back(builder, t, "cat", category.id)
     builder.adjust(1)
+    return builder.as_markup()
+
+
+def repeat_menu(t: Translator, current: int) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for hours in REPEAT_PRESETS:
+        mark = "• " if hours == current else ""
+        builder.button(
+            text=f"{mark}{t('btn-repeat-hours', hours=hours)}",
+            callback_data=_cb("setrepeat", value=str(hours)),
+        )
+    mark = "• " if current == 0 else ""
+    builder.button(text=f"{mark}{t('btn-repeat-off')}", callback_data=_cb("setrepeat", value="0"))
+    _back(builder, t, "menu")
+    builder.adjust(3, 3, 1, 1)
     return builder.as_markup()
 
 
