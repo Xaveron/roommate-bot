@@ -158,18 +158,19 @@ async def test_away_member_is_skipped_and_returns_without_debts(session):
     category = await bread(session, room)
     (assignment,) = by_category(await plan(session, room, "2026-09-25 18:00"), category)
     state = await QueueRepo(session).get(category.id, anya.id)
-    state.skip_debt = 2
+    state.skip_debt, state.credit = 2, 1
 
     away = AwayService(session)
     await away.go_away(room, anya, date(2026, 9, 28), at("2026-09-25 18:05"))
     assert is_away(anya, date(2026, 9, 28)) and not is_away(anya, date(2026, 9, 29))
-    assert state.skip_debt == 0
+    assert state.skip_debt == 0 and state.credit == 1  # debts dropped, credits kept
 
     # Her open turn goes to the next roommate right away.
     (handover,) = by_category(await plan(session, room, "2026-09-25 18:06"), category)
     assert assignment.status == S.CANCELLED and handover.member_id == borya.id
     assert (await queue_member(session, category, "2026-09-27")).id != anya.id
-    assert (await queue_member(session, category, "2026-09-29")).id == anya.id
+    # Back on the 29th: she's at the front, but her kept credit skips this one turn.
+    assert (await queue_member(session, category, "2026-09-29")).id == borya.id
 
 
 async def test_back_early_and_absence_history(session):
@@ -182,8 +183,11 @@ async def test_back_early_and_absence_history(session):
     absence = await absences.current(anya.id, date(2026, 9, 26))
     assert (absence.start_date, absence.end_date) == (date(2026, 9, 25), date(2026, 10, 15))
 
+    state = await QueueRepo(session).get((await bread(session, room)).id, anya.id)
+    state.skip_debt, state.credit = 1, 2
     assert await away.come_back(room, anya, at("2026-09-30 09:00"))
     assert anya.away_until is None and absence.end_date == date(2026, 9, 29)
+    assert state.skip_debt == 0 and state.credit == 2
     assert not await away.come_back(room, anya, at("2026-09-30 10:00"))
 
     # Left and came back the same day: no absence is kept.

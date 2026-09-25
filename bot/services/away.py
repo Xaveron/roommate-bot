@@ -25,7 +25,7 @@ class AwayService:
         self.queue = QueueRepo(session)
 
     async def go_away(self, room: Room, member: Member, until: date, now: datetime) -> None:
-        """Skip the member until ``until``. Debts are dropped: they come back with a clean slate.
+        """Skip the member until ``until``. Skip debts are dropped, out-of-turn credits are kept.
 
         An open turn of the member is handed over by the scheduler on its next tick.
         """
@@ -42,7 +42,7 @@ class AwayService:
         else:
             absence.end_date = until
         member.away_until = until
-        await self.queue.reset_balances(member_id=member.id)
+        await self.queue.reset_balances(member_id=member.id, credits=False)
         await self.session.flush()
 
     async def come_back(self, room: Room, member: Member, now: datetime) -> bool:
@@ -57,6 +57,6 @@ class AwayService:
                 await self.absences.delete(absence)  # left and came back the same day
             else:
                 absence.end_date = today - timedelta(days=1)
-        await self.queue.reset_balances(member_id=member.id)
+        await self.queue.reset_balances(member_id=member.id, credits=False)
         await self.session.flush()
         return True

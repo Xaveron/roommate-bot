@@ -35,9 +35,16 @@ class QueueRepo(Repository):
         )
         return 0 if current is None else current + 1
 
-    async def reset_balances(self, *, category_id: int | None = None, member_id: int | None = None):
-        """Zero skip debts and credits of a category, of a member, or of one member in one queue."""
-        query = update(QueueState).values(skip_debt=0, credit=0)
+    async def reset_balances(
+        self,
+        *,
+        category_id: int | None = None,
+        member_id: int | None = None,
+        credits: bool = True,
+    ) -> None:
+        """Zero skip debts (and credits, unless ``credits=False``) of a category or a member."""
+        values = {"skip_debt": 0, "credit": 0} if credits else {"skip_debt": 0}
+        query = update(QueueState).values(**values)
         if category_id is not None:
             query = query.where(QueueState.category_id == category_id)
         if member_id is not None:
