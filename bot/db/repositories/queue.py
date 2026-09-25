@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from bot.db.models import QueueState
 from bot.db.repositories.base import Repository
@@ -34,6 +34,15 @@ class QueueRepo(Repository):
             select(func.max(QueueState.position)).where(QueueState.category_id == category_id)
         )
         return 0 if current is None else current + 1
+
+    async def reset_balances(self, *, category_id: int | None = None, member_id: int | None = None):
+        """Zero skip debts and credits of a category, of a member, or of one member in one queue."""
+        query = update(QueueState).values(skip_debt=0, credit=0)
+        if category_id is not None:
+            query = query.where(QueueState.category_id == category_id)
+        if member_id is not None:
+            query = query.where(QueueState.member_id == member_id)
+        await self.session.execute(query.execution_options(synchronize_session="fetch"))
 
     async def add(self, category_id: int, member_id: int, position: int) -> QueueState:
         state = QueueState(

@@ -88,6 +88,19 @@ class DutyStatus(enum.StrEnum):
 COMPLETED_DUTY_STATUSES = (DutyStatus.DONE, DutyStatus.OUT_OF_TURN)
 
 
+class ReviewStatus(enum.StrEnum):
+    """Roommates' verdict on a completed duty (👍 / 🤨 votes in the group chat)."""
+
+    OPEN = "open"
+    CONFIRMED = "confirmed"
+    DISPUTED = "disputed"  # the majority voted against: the duty doesn't count
+
+
+class Vote(enum.StrEnum):
+    UP = "up"
+    DOWN = "down"
+
+
 class AssignmentStatus(enum.StrEnum):
     PENDING = "pending"  # reminder sent (or about to be), waiting for an answer
     ACCEPTED = "accepted"  # "I'll buy it", waiting for "Done"
@@ -145,6 +158,8 @@ class Room(Base):
     timezone: Mapped[str] = mapped_column(String(64), default="Europe/Chisinau")
     quiet_hours_start: Mapped[time | None] = mapped_column(Time)
     quiet_hours_end: Mapped[time | None] = mapped_column(Time)
+    # Repeat an unanswered reminder after this many hours (0 = never).
+    repeat_after_hours: Mapped[int] = mapped_column(Integer, default=3, server_default=text("3"))
     # Telegram id of whoever created the room; has admin rights like chat admins.
     created_by: Mapped[int | None] = mapped_column(BigInteger)
     # False when the bot was removed from the group.
@@ -273,9 +288,37 @@ class Duty(Base):
     member_id: Mapped[int] = mapped_column(ForeignKey("members.id", ondelete="CASCADE"), index=True)
     status: Mapped[str] = mapped_column(String(16))
     amount: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
+    review: Mapped[str] = mapped_column(
+        String(16), default=ReviewStatus.OPEN, server_default=ReviewStatus.OPEN.value
+    )
     assignment_id: Mapped[int | None] = mapped_column(
         ForeignKey("assignments.id", ondelete="SET NULL")
     )
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
     member: Mapped[Member] = relationship(lazy="joined", innerjoin=True)
+
+
+class DutyVote(Base):
+    """A roommate's 👍 / 🤨 on a completed duty."""
+
+    __tablename__ = "duty_votes"
+    __table_args__ = (UniqueConstraint("duty_id", "member_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    duty_id: Mapped[int] = mapped_column(ForeignKey("duties.id", ondelete="CASCADE"), index=True)
+    member_id: Mapped[int] = mapped_column(ForeignKey("members.id", ondelete="CASCADE"))
+    vote: Mapped[str] = mapped_column(String(8))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class Absence(Base):
+    """A period (inclusive dates) when a member was away. Used by the fair queue mode."""
+
+    __tablename__ = "absences"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    member_id: Mapped[int] = mapped_column(ForeignKey("members.id", ondelete="CASCADE"), index=True)
+    start_date: Mapped[date] = mapped_column(Date)
+    end_date: Mapped[date] = mapped_column(Date)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
