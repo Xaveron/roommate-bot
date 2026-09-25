@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import enum
 from datetime import UTC, date, datetime, time
-from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger,
@@ -20,11 +19,12 @@ from sqlalchemy import (
     Index,
     Integer,
     MetaData,
-    Numeric,
     String,
     Time,
     UniqueConstraint,
+    false,
     text,
+    true,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
@@ -160,6 +160,10 @@ class Room(Base):
     quiet_hours_end: Mapped[time | None] = mapped_column(Time)
     # Repeat an unanswered reminder after this many hours (0 = never).
     repeat_after_hours: Mapped[int] = mapped_column(Integer, default=3, server_default=text("3"))
+    currency: Mapped[str] = mapped_column(String(8), default="MDL", server_default="MDL")
+    # Post a weekly summary on Sunday evenings.
+    weekly_summary: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
+    weekly_summary_sent_on: Mapped[date | None] = mapped_column(Date)
     # Telegram id of whoever created the room; has admin rights like chat admins.
     created_by: Mapped[int | None] = mapped_column(BigInteger)
     # False when the bot was removed from the group.
@@ -287,7 +291,8 @@ class Duty(Base):
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id", ondelete="CASCADE"))
     member_id: Mapped[int] = mapped_column(ForeignKey("members.id", ondelete="CASCADE"), index=True)
     status: Mapped[str] = mapped_column(String(16))
-    amount: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
+    # What the member spent on it, in cents (the matching expense is linked via Expense.duty_id).
+    amount_cents: Mapped[int | None] = mapped_column(Integer)
     review: Mapped[str] = mapped_column(
         String(16), default=ReviewStatus.OPEN, server_default=ReviewStatus.OPEN.value
     )
@@ -322,3 +327,67 @@ class Absence(Base):
     start_date: Mapped[date] = mapped_column(Date)
     end_date: Mapped[date] = mapped_column(Date)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class Expense(Base):
+    """Money one member paid for several roommates (or a debt repayment, see is_settlement).
+
+    Amounts are integers in cents to avoid floating point issues.
+    """
+
+    __tablename__ = "expenses"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id", ondelete="CASCADE"), index=True)
+    payer_id: Mapped[int] = mapped_column(ForeignKey("members.id", ondelete="CASCADE"))
+    amount_cents: Mapped[int] = mapped_column(Integer)
+    description: Mapped[str] = mapped_column(String(128), default="")
+    # A repayment "payer -> the only share holder" rather than a purchase.
+    is_settlement: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    duty_id: Mapped[int | None] = mapped_column(ForeignKey("duties.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+    payer: Mapped[Member] = relationship(lazy="joined", innerjoin=True)
+    shares: Mapped[list[ExpenseShare]] = relationship(
+        lazy="selectin", cascade="all, delete-orphan", passive_deletes=True
+    )
+
+
+class ExpenseShare(Base):
+    """How much of an expense a member owes."""
+
+    __tablename__ = "expense_shares"
+    __table_args__ = (UniqueConstraint("expense_id", "member_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    expense_id: Mapped[int] = mapped_column(
+        ForeignKey("expenses.id", ondelete="CASCADE"), index=True
+    )
+    member_id: Mapped[int] = mapped_column(ForeignKey("members.id", ondelete="CASCADE"))
+    amount_cents: Mapped[int] = mapped_column(Integer)
+
+
+class ShoppingItem(Base):
+    """An entry of the room's shared shopping list."""
+
+    __tablename__ = "shopping_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id", ondelete="CASCADE"), index=True)
+    text: Mapped[str] = mapped_column(String(128))
+    added_by: Mapped[int | None] = mapped_column(ForeignKey("members.id", ondelete="SET NULL"))
+    bought_by: Mapped[int | None] = mapped_column(ForeignKey("members.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    bought_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
+class Achievement(Base):
+    """A badge a member earned (see bot.services.achievements for the rules)."""
+
+    __tablename__ = "achievements"
+    __table_args__ = (UniqueConstraint("member_id", "code"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    member_id: Mapped[int] = mapped_column(ForeignKey("members.id", ondelete="CASCADE"), index=True)
+    code: Mapped[str] = mapped_column(String(32))
+    earned_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)

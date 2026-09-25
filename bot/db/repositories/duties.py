@@ -2,11 +2,10 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import datetime
-from decimal import Decimal
 
 from sqlalchemy import func, select
 
-from bot.db.models import COMPLETED_DUTY_STATUSES, Duty, ReviewStatus
+from bot.db.models import COMPLETED_DUTY_STATUSES, Category, Duty, ReviewStatus
 from bot.db.repositories.base import Repository
 
 
@@ -19,7 +18,6 @@ class DutyRepo(Repository):
         status: str,
         created_at: datetime,
         assignment_id: int | None = None,
-        amount: Decimal | None = None,
     ) -> Duty:
         duty = Duty(
             category_id=category_id,
@@ -27,7 +25,8 @@ class DutyRepo(Repository):
             status=status,
             created_at=created_at,
             assignment_id=assignment_id,
-            amount=amount,
+            amount_cents=None,
+            review=ReviewStatus.OPEN,
         )
         self.session.add(duty)
         await self.session.flush()
@@ -56,6 +55,28 @@ class DutyRepo(Repository):
             .where(Duty.category_id == category_id)
             .order_by(Duty.created_at.desc(), Duty.id.desc())
             .limit(limit)
+        )
+        return result.all()
+
+    async def list_for_room(
+        self, room_id: int, since: datetime | None = None, until: datetime | None = None
+    ) -> Sequence[Duty]:
+        """All duty records of a room in [since, until), oldest first."""
+        query = (
+            select(Duty)
+            .join(Category, Category.id == Duty.category_id)
+            .where(Category.room_id == room_id)
+        )
+        if since is not None:
+            query = query.where(Duty.created_at >= since)
+        if until is not None:
+            query = query.where(Duty.created_at < until)
+        result = await self.session.scalars(query.order_by(Duty.created_at, Duty.id))
+        return result.all()
+
+    async def list_for_member(self, member_id: int) -> Sequence[Duty]:
+        result = await self.session.scalars(
+            select(Duty).where(Duty.member_id == member_id).order_by(Duty.created_at, Duty.id)
         )
         return result.all()
 
