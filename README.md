@@ -28,26 +28,34 @@ Interface languages: 🇷🇺 Russian, 🇷🇴 Romanian and 🇬🇧 English, c
   roommate taps **🏠 I live here**.
 - **Categories.** 🍞 Bread, 💧 Water and 🗑 Trash are created automatically. Add your own
   with `/add_category`, or disable and delete them.
-- **Fair round-robin queue.** There is a separate queue per category, and whoever did the chore least recently
-  goes next.
+- **Two queue modes per category.** *Round robin*: whoever did the chore least recently goes
+  next. *Fair*: whoever did it least often in the last 30 days goes next.
 - **Private reminders at the configured time,** with buttons
   **✅ I'll buy it · 🔄 We still have some · ⏭ Can't today**:
   - *I'll buy it* → *Done ✅* records the chore, moves the queue and tells the group chat.
   - *Still have some* keeps the queue where it is and reminds the same person tomorrow.
   - *Can't today* hands today's turn to the next person, and the skipper goes **first** next
     time (skip debt).
+- **Repeated reminders.** If there is no answer after N hours (configurable), the reminder
+  is sent once more. After a second silence the bot pokes the member in the group chat, with
+  humor and no scolding.
 - **Out-of-turn marks** with `/done`. They count, and the member's next regular turn is
   skipped (a credit).
+- **Confirmations.** Every "done" message in the group has **👍** and **🤨 Nope** buttons. If
+  the majority of the other roommates votes 🤨, the record is marked disputed and doesn't
+  count.
+- **"I'm away" mode** (`/away`). The member is skipped in every queue until a date and comes
+  back without debts.
 - **History** (`/history`) with one table per category, or all categories at once.
-- **Settings** (`/settings`, inline buttons): reminder time and weekdays per category, quiet
-  hours, timezone (default `Europe/Chisinau`), language.
+- **Settings** (`/settings`, inline buttons): reminder time, weekdays and queue mode per
+  category, repeat interval, quiet hours, timezone (default `Europe/Chisinau`), language.
 - **Resilient delivery.** If a roommate never opened the bot in private chat, the reminder
   goes to the group chat instead, with a mention and a hint.
 
 ### Roadmap
 
 - [x] **Stage 1:** core (rooms, queues, reminders, history, settings)
-- [ ] **Stage 2:** "fair" queue mode, repeated reminders, "I'm away" mode, confirmations
+- [x] **Stage 2:** "fair" queue mode, repeated reminders, "I'm away" mode, confirmations
 - [ ] **Stage 3:** expenses and balances, shopping list, statistics and charts,
       achievements, weekly summary, CSV export
 - [ ] **Stage 4:** Telegram Mini App (FastAPI + web UI)
@@ -64,6 +72,8 @@ Interface languages: 🇷🇺 Russian, 🇷🇴 Romanian and 🇬🇧 English, c
 | `/add_category [emoji name]` | group | Add a category, e.g. `/add_category 🧻 Toilet paper` |
 | `/settings` | group | Reminder times and days, quiet hours, timezone, language, roommates (admins only) |
 | `/members` | both | Who lives in the room and who hasn't opened the bot yet |
+| `/away [date]` | both | I'm away: skip me in every queue until the date (inclusive), e.g. `/away 15.10` |
+| `/back` | both | Back home early: back in the queues |
 | `/leave` | group | Leave the room |
 | `/room` | private | Pick the active room if you live in several |
 | `/cancel` | both | Cancel the current input |
@@ -75,7 +85,10 @@ categories and mark chores.
 
 ## How the queue works
 
-The queue is an ordered list: whoever did the chore least recently is first.
+Each category uses one of two modes (switch it in `/settings` → category).
+
+**Round robin** (default). The queue is an ordered list: whoever did the chore least recently
+is first.
 
 | Event | Effect |
 |---|---|
@@ -87,6 +100,22 @@ The queue is an ordered list: whoever did the chore least recently is first.
 
 Example with A, B, C. A can't today → B does it → the queue becomes `A⚠️, C, B` → A goes
 next, then C.
+
+**Fair.** The next one is whoever did the chore least often in the last 30 days. Ties follow
+the round-robin order. Counts are divided by the days the member actually lived in the room,
+so coming back from `/away` or moving in late doesn't create a debt. Skips and out-of-turn
+work show up in the counts directly.
+
+**Disputed records** (the majority voted 🤨) don't count. In round robin, the member owes the
+turn again: a skip debt, or a withdrawn credit for out-of-turn work. In fair mode, the record
+is simply not counted.
+
+**Reminders.** A reminder is repeated after N hours without an answer (default 3, set in
+`/settings`). After another N hours the group chat gets a friendly poke. Quiet hours are
+respected.
+
+**Away.** While `/away` is on, the member is skipped everywhere and their open turn is handed
+over. On return they have no debts.
 
 ## Quick start
 
