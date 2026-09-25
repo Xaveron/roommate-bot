@@ -1,6 +1,6 @@
 # 🏠 RoomMate Bot
 
-[![CI](https://github.com/<your-username>/roommate-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/<your-username>/roommate-bot/actions/workflows/ci.yml)
+[![CI](https://github.com/Xaveron/roommate-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/Xaveron/roommate-bot/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
 
@@ -105,7 +105,7 @@ You don't need to disable privacy mode. Whenever the bot needs free-text input, 
 Requires Python 3.12+.
 
 ```bash
-git clone https://github.com/<your-username>/roommate-bot.git
+git clone https://github.com/Xaveron/roommate-bot.git
 cd roommate-bot
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
