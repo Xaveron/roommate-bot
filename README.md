@@ -49,6 +49,15 @@ Interface languages: 🇷🇺 Russian, 🇷🇴 Romanian and 🇬🇧 English, c
 - **History** (`/history`) with one table per category, or all categories at once.
 - **Settings** (`/settings`, inline buttons): reminder time, weekdays and queue mode per
   category, repeat interval, quiet hours, timezone (default `Europe/Chisinau`), language.
+- **Money.** After "Done" the bot asks what the purchase cost (you can skip). `/expense` adds any
+  shared expense, split between everyone or selected roommates. `/balance` shows who owes whom
+  with the fewest transfers (Splitwise-style), plus an **"I paid my debt back"** button.
+- **Shared shopping list.** `/buy salt, milk` adds items, and `/list` shows them with "bought"
+  buttons. **🛒 Going to the shop** notifies everyone and includes the current list.
+- **Statistics and fun.** `/stats` shows the month by person and category with a chart. `/top`
+  is a leaderboard. Achievements include 👑 Bread King, 🥷 Trash Ninja and 🔥 No Skips. The
+  group gets a weekly summary on Sunday evening.
+- **Export.** `/export` sends CSV files: one per category plus the expenses.
 - **Resilient delivery.** If a roommate never opened the bot in private chat, the reminder
   goes to the group chat instead, with a mention and a hint.
 
@@ -56,7 +65,7 @@ Interface languages: 🇷🇺 Russian, 🇷🇴 Romanian and 🇬🇧 English, c
 
 - [x] **Stage 1:** core (rooms, queues, reminders, history, settings)
 - [x] **Stage 2:** "fair" queue mode, repeated reminders, "I'm away" mode, confirmations
-- [ ] **Stage 3:** expenses and balances, shopping list, statistics and charts,
+- [x] **Stage 3:** expenses and balances, shopping list, statistics and charts,
       achievements, weekly summary, CSV export
 - [ ] **Stage 4:** Telegram Mini App (FastAPI + web UI)
 
@@ -74,6 +83,14 @@ Interface languages: 🇷🇺 Russian, 🇷🇴 Romanian and 🇬🇧 English, c
 | `/members` | both | Who lives in the room and who hasn't opened the bot yet |
 | `/away [date]` | both | I'm away: skip me in every queue until the date (inclusive), e.g. `/away 15.10` |
 | `/back` | both | Back home early: back in the queues |
+| `/buy item, item` | both | Add to the shared shopping list |
+| `/list` | both | Shopping list with "bought" buttons and **🛒 Going to the shop** |
+| `/shop` | both | "I'm going to the shop": notify everyone and show the list |
+| `/expense [amount] [what]` | both | Shared expense, e.g. `/expense 120 groceries`, then choose who shares it |
+| `/balance` | both | Who owes whom, with "I paid my debt back" buttons |
+| `/stats` | both | This month by person and category, with a chart (◀ previous months) |
+| `/top` | both | Monthly leaderboard and achievements |
+| `/export` | both | CSV files: history per category and expenses |
 | `/leave` | group | Leave the room |
 | `/room` | private | Pick the active room if you live in several |
 | `/cancel` | both | Cancel the current input |
@@ -115,7 +132,30 @@ is simply not counted.
 respected.
 
 **Away.** While `/away` is on, the member is skipped everywhere and their open turn is handed
-over. On return they have no debts.
+over. On return they have no skip debts; out-of-turn credits ⭐ are kept.
+
+## How money works
+
+- Amounts are stored in cents, so there are no rounding surprises. The currency is chosen per
+  room in `/settings` (MDL by default).
+- **Amount after "Done".** It's optional, not asked for the trash, and split equally between
+  the roommates who are at home that day (not away).
+- **`/expense`.** The payer is whoever adds it. The split is equal between the ticked
+  roommates. Shares differ by at most one cent and always add up exactly.
+- **`/balance`.** Each roommate's balance is what they paid minus their shares. Transfers are
+  suggested greedily: the biggest debtor pays the biggest creditor. That's at most n−1
+  transfers, and nobody pays through a third person. Tapping a transfer records a repayment.
+  Either side of the transfer may tap it.
+- **Disputed purchases.** If a "done" record is voted down (🤨), its amount is removed from the
+  balances too.
+
+**Achievements** are checked after every chore, purchase and expense: 🌱 First Step, 👑 Bread
+King, 💧 Water Carrier and 🥷 Trash Ninja (10 of each), 🦸 Superhero (5 out of turn), 🔥 No
+Skips (10 in a row), 🛒 Provider (10 list items), 💰 Treasurer (10 expenses), 💯 Centurion
+(100 chores).
+
+**The weekly summary** comes on Sunday at 20:00 room time, outside quiet hours. It can be
+turned off in `/settings`.
 
 ## Quick start
 
