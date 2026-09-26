@@ -1,10 +1,10 @@
-# Production stack: the bot + PostgreSQL (and, from stage 4, Caddy for the Mini App).
+# Production stack: the bot, PostgreSQL, the Mini App (FastAPI + React) and Caddy (HTTPS).
 #
 #   docker compose -f docker-compose.prod.yml up -d --build
 #
-# Needs BOT_TOKEN and POSTGRES_PASSWORD in .env (see .env.example and docs/DEPLOY.md).
-# The bot uses long polling, so nothing here needs an open port. The database is only
-# reachable from the internal compose network: never publish its port (Docker bypasses ufw).
+# Needs BOT_TOKEN, POSTGRES_PASSWORD and WEBAPP_DOMAIN in .env (see .env.example and
+# docs/DEPLOY.md). Only Caddy publishes ports (80/443). The database is only reachable from
+# the internal compose network: never publish its port (Docker bypasses ufw).
 name: roommate-prod
 
 x-logging: &logging
@@ -21,11 +21,30 @@ services:
     environment:
       # Overrides any DATABASE_URL from .env: production always uses the bundled PostgreSQL.
       DATABASE_URL: postgresql+asyncpg://roommate:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/roommate
+      # The bot's "📱 App" buttons open this address.
+      WEBAPP_URL: https://${WEBAPP_DOMAIN:?set WEBAPP_DOMAIN in .env}
     depends_on:
       postgres:
         condition: service_healthy
     restart: unless-stopped
     mem_limit: 768m
+    logging: *logging
+
+  # Telegram Mini App: read-only JSON API (checks Telegram initData) + the built frontend.
+  webapp:
+    build:
+      context: .
+      dockerfile: Dockerfile.webapp
+    image: roommate-webapp:latest
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://roommate:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/roommate
+      AUTO_MIGRATE: "false"  # the bot applies migrations
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 384m
     logging: *logging
 
   postgres:
@@ -45,22 +64,27 @@ services:
     mem_limit: 512m
     logging: *logging
 
-  # Stage 4 (Telegram Mini App): HTTPS reverse proxy with automatic Let's Encrypt
-  # certificates. Point a domain to this server, edit deploy/Caddyfile, then uncomment.
-  # caddy:
-  #   image: caddy:2-alpine
-  #   ports:
-  #     - "80:80"
-  #     - "443:443"
-  #     - "443:443/udp"
-  #   volumes:
-  #     - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
-  #     - caddy-data:/data
-  #     - caddy-config:/config
-  #   restart: unless-stopped
-  #   logging: *logging
+  # HTTPS reverse proxy with automatic Let's Encrypt certificates (see deploy/Caddyfile).
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      WEBAPP_DOMAIN: ${WEBAPP_DOMAIN:?set WEBAPP_DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      webapp:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 128m
+    logging: *logging
 
 volumes:
   postgres-data:
-  # caddy-data:
-  # caddy-config:
+  caddy-data:  # certificates: keep it, Let's Encrypt has rate limits
+  caddy-config:
