@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from datetime import datetime, time
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.models import CategoryKind, Member, Room, User
@@ -51,27 +52,36 @@ class RoomService:
                 room.name = title
             return room, False
 
-        room = await self.rooms.add(
-            Room(
-                chat_id=chat_id,
-                name=title,
-                language=language,
-                timezone=timezone,
-                created_by=created_by,
-                is_active=True,
-                created_at=now,
-            )
-        )
-        category_service = CategoryService(self.session)
-        for kind, emoji, reminder_time in DEFAULT_CATEGORIES:
-            await category_service.create(
-                room,
-                name=default_names[kind],
-                emoji=emoji,
-                now=now,
-                kind=kind,
-                reminder_time=reminder_time,
-            )
+        try:
+            async with self.session.begin_nested():
+                room = await self.rooms.add(
+                    Room(
+                        chat_id=chat_id,
+                        name=title,
+                        language=language,
+                        timezone=timezone,
+                        created_by=created_by,
+                        is_active=True,
+                        created_at=now,
+                    )
+                )
+                category_service = CategoryService(self.session)
+                for kind, emoji, reminder_time in DEFAULT_CATEGORIES:
+                    await category_service.create(
+                        room,
+                        name=default_names[kind],
+                        emoji=emoji,
+                        now=now,
+                        kind=kind,
+                        reminder_time=reminder_time,
+                    )
+        except IntegrityError:
+            # Telegram delivered two updates at once ("bot added" + /start) and the other
+            # one created the room first.
+            existing = await self.rooms.get_by_chat_id(chat_id)
+            if existing is None:
+                raise
+            return existing, False
         return room, True
 
     async def join(self, room: Room, user: User, now: datetime) -> tuple[Member, bool]:
@@ -80,18 +90,28 @@ class RoomService:
         if member is not None and member.is_active:
             return member, False
         if member is None:
-            member = await self.members.add(
-                Member(
-                    room_id=room.id,
-                    telegram_user_id=user.id,
-                    user=user,
-                    is_active=True,
-                    joined_at=now,
-                )
-            )
-        else:
-            member.is_active = True
-            member.away_until = None
+            try:
+                async with self.session.begin_nested():
+                    member = await self.members.add(
+                        Member(
+                            room_id=room.id,
+                            telegram_user_id=user.id,
+                            user=user,
+                            is_active=True,
+                            joined_at=now,
+                        )
+                    )
+                    await self.queue.enqueue_member(room.id, member.id)
+            except IntegrityError:
+                # A double tap on "I live here": the other request added the member.
+                existing = await self.members.get_by_user(room.id, user.id)
+                if existing is None:
+                    raise
+                return existing, False
+            await self.session.flush()
+            return member, True
+        member.is_active = True
+        member.away_until = None
         await self.queue.enqueue_member(room.id, member.id)
         await self.session.flush()
         return member, True

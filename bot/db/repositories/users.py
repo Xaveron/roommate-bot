@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 
 from bot.db.models import User
 from bot.db.repositories.base import Repository
@@ -22,17 +23,23 @@ class UserRepo(Repository):
         """Create the user or refresh their profile fields if they changed."""
         user = await self.get(user_id)
         if user is None:
-            user = User(
-                id=user_id,
-                first_name=first_name,
-                last_name=last_name,
-                username=username,
-                language_code=language_code,
-                dm_available=False,
-            )
-            self.session.add(user)
-            await self.session.flush()
-            return user
+            try:
+                async with self.session.begin_nested():
+                    user = User(
+                        id=user_id,
+                        first_name=first_name,
+                        last_name=last_name,
+                        username=username,
+                        language_code=language_code,
+                        dm_available=False,
+                    )
+                    self.session.add(user)
+                return user
+            except IntegrityError:
+                # A concurrent update created the same user a moment ago: use that row.
+                user = await self.get(user_id)
+                if user is None:
+                    raise
         fields = {
             "first_name": first_name,
             "last_name": last_name,

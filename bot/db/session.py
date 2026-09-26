@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import weakref
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -49,6 +50,10 @@ class Database:
     SQLite allows a single writer, and interleaved async transactions easily end up with
     "database is locked" errors, so with SQLite every unit of work is serialized through one
     lock. PostgreSQL runs units of work concurrently and relies on row locks instead.
+
+    Independently of the backend, :meth:`lock_for` serializes the work of one chat: its
+    updates (Telegram often sends several at once, e.g. "bot added" and /start) and the
+    scheduler's work for its room never interleave, while different rooms run in parallel.
     """
 
     def __init__(self, url: str, *, engine: AsyncEngine | None = None, **engine_kwargs: Any):
@@ -56,6 +61,18 @@ class Database:
         self.engine = engine or create_engine(url, **engine_kwargs)
         self.sessionmaker = async_sessionmaker(self.engine, expire_on_commit=False)
         self._lock = asyncio.Lock() if is_sqlite(url) else None
+        # Locks disappear by themselves once nobody holds or awaits them.
+        self._chat_locks: weakref.WeakValueDictionary[int, asyncio.Lock] = (
+            weakref.WeakValueDictionary()
+        )
+
+    def lock_for(self, chat_id: int) -> asyncio.Lock:
+        """The lock that serializes everything happening in one chat."""
+        lock = self._chat_locks.get(chat_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._chat_locks[chat_id] = lock
+        return lock
 
     @asynccontextmanager
     async def session(self) -> AsyncIterator[AsyncSession]:

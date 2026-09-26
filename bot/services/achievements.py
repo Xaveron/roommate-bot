@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.models import (
@@ -129,9 +130,17 @@ class AchievementService:
         """Award whatever the member has newly earned; returns the new codes in display order."""
         have = await self.achievements.codes(member.id)
         new = earned_codes(await self.progress(member)) - have
+        awarded = []
         for code in (c for c in CODES if c in new):
-            await self.achievements.add(Achievement(member_id=member.id, code=code, earned_at=now))
-        return [c for c in CODES if c in new]
+            try:
+                async with self.achievements.session.begin_nested():
+                    await self.achievements.add(
+                        Achievement(member_id=member.id, code=code, earned_at=now)
+                    )
+            except IntegrityError:
+                continue  # awarded by a concurrent update a moment ago
+            awarded.append(code)
+        return awarded
 
     async def earned_between(
         self, members: Sequence[Member], since: datetime, until: datetime

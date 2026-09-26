@@ -28,11 +28,12 @@ async def reminder_tick(db: Database, notifier: Notifier) -> None:
     """
     now = utcnow()
     async with db.session() as session:
-        room_ids = [room.id for room in await RoomRepo(session).list_active()]
+        rooms = [(room.id, room.chat_id) for room in await RoomRepo(session).list_active()]
 
-    for room_id in room_ids:
+    for room_id, chat_id in rooms:
         try:
-            async with db.session() as session:
+            # The same lock as the room's updates: a tick never races a button press.
+            async with db.lock_for(chat_id), db.session() as session:
                 room = await RoomRepo(session).get(room_id)
                 if room is None:
                     continue
