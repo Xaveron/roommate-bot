@@ -349,7 +349,10 @@ class Expense(Base):
 
     payer: Mapped[Member] = relationship(lazy="joined", innerjoin=True)
     shares: Mapped[list[ExpenseShare]] = relationship(
-        lazy="selectin", cascade="all, delete-orphan", passive_deletes=True
+        lazy="selectin",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="ExpenseShare.member_id",
     )
 
 
