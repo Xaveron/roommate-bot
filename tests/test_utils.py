@@ -99,3 +99,16 @@ def test_render_table_aligns_columns_and_truncates():
     lines = table.splitlines()
     assert lines[1] == "25.09 18:00 Алексан… ✅ done"
     assert lines[2].startswith("26.09 09:15 Боря     ⏭")
+
+
+def test_first_reminder_tick_is_not_skipped_after_a_slow_start():
+    from bot.config import Settings
+    from bot.scheduler.setup import setup_scheduler
+
+    scheduler = setup_scheduler(
+        Settings(bot_token="1:x"),  # type: ignore[arg-type]
+        db=None,  # type: ignore[arg-type]
+        notifier=None,  # type: ignore[arg-type]
+    )
+    job = scheduler.get_job("reminder_tick")
+    assert job is not None and job.misfire_grace_time >= 5

@@ -25,6 +25,9 @@ def setup_scheduler(settings: Settings, db: Database, notifier: Notifier) -> Asy
         id="reminder_tick",
         max_instances=1,
         coalesce=True,
+        # Startup work (e.g. registering bot commands) may delay the first run by a few
+        # seconds; run it late rather than skip it.
+        misfire_grace_time=max(settings.scheduler_tick_seconds // 2, 5),
         next_run_time=datetime.now(UTC),
     )
     return scheduler
