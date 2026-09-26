@@ -17,18 +17,15 @@ from aiogram.types import CallbackQuery, ChatMemberUpdated, Message, WebAppInfo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.announcements import announce_join, leave_text
 from bot.config import Settings
 from bot.db.models import Member, Room, User
 from bot.db.repositories import MemberRepo
-from bot.handlers.common import default_category_names, is_group
-from bot.i18n import I18n, Translator
+from bot.handlers.common import is_group
+from bot.i18n import I18n, Translator, default_category_names
 from bot.keyboards.callbacks import JoinCb, LeaveCb, RoomPickCb
-from bot.keyboards.common import (
-    join_keyboard,
-    leave_confirm_keyboard,
-    open_bot_keyboard,
-    room_picker,
-)
+from bot.keyboards.common import join_keyboard, leave_confirm_keyboard, room_picker
+from bot.notifications import Notifier
 from bot.services.clock import utcnow
 from bot.services.rooms import RoomService
 from bot.utils.text import bold, esc
@@ -151,11 +148,11 @@ async def start_in_private(
 @router.callback_query(JoinCb.filter())
 async def join_room(
     callback: CallbackQuery,
-    bot: Bot,
     session: AsyncSession,
     user: User | None,
     room: Room | None,
     t: Translator,
+    notifier: Notifier,
 ) -> None:
     if room is None or user is None or callback.message is None:
         await callback.answer(t("err-no-room-group"), show_alert=True)
@@ -165,16 +162,7 @@ async def join_room(
         await callback.answer(t("join-already"))
         return
     await callback.answer(t("join-toast"))
-    name = bold(member.display_name)
-    if user.dm_available:
-        await bot.send_message(room.chat_id, t("join-done", name=name))
-    else:
-        username = (await bot.me()).username or ""
-        await bot.send_message(
-            room.chat_id,
-            t("join-done-need-dm", name=name),
-            reply_markup=open_bot_keyboard(t, username),
-        )
+    await announce_join(notifier, room, member)
 
 
 @router.message(Command("leave"), GROUP_CHATS, flags={"require": "member"})
@@ -203,9 +191,7 @@ async def leave_room_confirm(
     await RoomService(session).leave(member)
     await callback.answer()
     if callback.message is not None:
-        await callback.message.edit_text(  # type: ignore[union-attr]
-            t("leave-done", name=bold(member.display_name))
-        )
+        await callback.message.edit_text(leave_text(t, member))  # type: ignore[union-attr]
 
 
 @router.message(Command("members"), flags={"require": "room"})

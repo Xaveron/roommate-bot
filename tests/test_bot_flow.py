@@ -467,6 +467,15 @@ async def test_mini_app_entry_points(db: Database):
         reply = h.session.sent(ANYA.id)[-1]
         assert reply.reply_markup.inline_keyboard[0][0].web_app.url.endswith(f"?room={room_id}")
 
+        # Somebody from the group who hasn't joined yet may join in the Mini App.
+        vika = User(id=3, is_bot=False, first_name="Вика", language_code="ru")
+        await h.message(vika, f"/start app_{room_id}", chat=private(vika))
+        offer = h.session.sent(vika.id)[-1]
+        assert "Открой приложение — там можно вступить" in offer.text
+        assert offer.reply_markup.inline_keyboard[0][0].web_app.url.endswith(f"?room={room_id}")
+        await h.message(vika, "/start app_999", chat=private(vika))
+        assert "не живёшь ни в одной комнате" in h.session.sent(vika.id)[-1].text
+
         # Plain /start in private shows the app button first.
         await h.message(ANYA, "/start", chat=private(ANYA))
         first = h.session.sent(ANYA.id)[-1].reply_markup.inline_keyboard[0][0]

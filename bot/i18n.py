@@ -7,10 +7,13 @@ Every user-facing string lives in ``bot/locales/<lang>/*.ftl``. Handlers receive
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 from fluent.runtime import FluentBundle, FluentResource
+
+from bot.db.models import CategoryKind
 
 logger = logging.getLogger(__name__)
 
@@ -72,3 +75,12 @@ class I18n:
         if locale != FALLBACK_LOCALE:
             chain.append(self._bundles[FALLBACK_LOCALE])
         return Translator(locale, chain)
+
+
+def default_category_names(i18n: I18n, language: str) -> Mapping[str, str]:
+    """Names of the default categories (bread, water, trash) in a language."""
+    t = i18n.get(language)
+    return {
+        kind: t("category-default-name", kind=kind)
+        for kind in (CategoryKind.BREAD, CategoryKind.WATER, CategoryKind.TRASH)
+    }

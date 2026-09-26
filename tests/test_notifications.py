@@ -22,7 +22,7 @@ class FakeBot:
     async def me(self):
         return SimpleNamespace(username="roommate_test_bot")
 
-    async def send_message(self, chat_id: int, text: str, reply_markup: Any = None):
+    async def send_message(self, chat_id: int, text: str, reply_markup: Any = None, **kwargs: Any):
         if chat_id in self.blocked:
             raise TelegramForbiddenError(
                 method=SendMessage(chat_id=chat_id, text=text),

@@ -280,6 +280,7 @@ err-no-days = At least one day is required.
 err-bad-time = I didn't get the time. Example: 18:30
 err-bad-time-range = I didn't get the range. Example: 23:00-08:00
 err-bad-timezone = Unknown timezone. Example: Europe/Chisinau
+err-turn-changed = The queue has just changed — have another look 🙂
 
 ## Administration
 
@@ -569,4 +570,11 @@ btn-webapp = 📱 App
 webapp-open = 📱 Queue, history, balance and statistics of “{ $room }” — in the app:
 webapp-open-private = 📱 The app opens in private chat — tap the button below.
 btn-webapp-private = 💬 Open in private chat
+webapp-open-join = 📱 You haven't joined “{ $room }” yet. Open the app — you can join the room there.
 webapp-not-configured = The app isn't connected yet.
+app-away-set = 🏖 Done: skipping you in queues until { $date } inclusive.
+app-category-added = ✅ Category { $title } added! Reminder at { $time }, every day.
+app-left = 👋 You no longer live in “{ $room }”. The history stays.
+app-member-removed = 🚪 { $name } is no longer in the room. Queues updated.
+app-export-sent = 📦 Sent the CSV files to your private chat.
+err-dm-needed = I can't write to you in private — open the bot, tap “Start” and try again.

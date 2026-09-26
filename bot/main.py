@@ -5,9 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from aiogram import Bot, Dispatcher
-from aiogram.client.default import DefaultBotProperties
-from aiogram.enums import ParseMode
+from aiogram import Dispatcher
 from aiogram.exceptions import TelegramUnauthorizedError
 from aiogram.fsm.storage.memory import MemoryStorage
 
@@ -23,7 +21,7 @@ from bot.middlewares import (
     RequirementsMiddleware,
     RoomContextMiddleware,
 )
-from bot.notifications import Notifier
+from bot.notifications import Notifier, create_bot
 from bot.scheduler import setup_scheduler
 
 logger = logging.getLogger(__name__)
@@ -62,10 +60,7 @@ async def run() -> None:
 
     db = Database(settings.database_url)
     i18n = I18n(default_locale=settings.default_language)
-    bot = Bot(
-        token=settings.bot_token.get_secret_value(),
-        default=DefaultBotProperties(parse_mode=ParseMode.HTML, link_preview_is_disabled=True),
-    )
+    bot = create_bot(settings.bot_token.get_secret_value())
     notifier = Notifier(bot, i18n)
     dp = build_dispatcher(settings, db, i18n, notifier)
     scheduler = setup_scheduler(settings, db, notifier)

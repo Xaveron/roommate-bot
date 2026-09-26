@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from contextlib import suppress
 
-from aiogram import Bot, Router
+from aiogram import Router
 from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command, CommandObject
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.announcements import announce_achievements, going_shopping
 from bot.db.models import Member, Room
 from bot.db.repositories import MemberRepo
-from bot.handlers.common import announce_achievements
 from bot.i18n import Translator
 from bot.keyboards.callbacks import ShopCb
 from bot.keyboards.money import shopping_keyboard
@@ -20,9 +20,8 @@ from bot.notifications import Notifier
 from bot.render import shopping_text
 from bot.services.clock import utcnow
 from bot.services.errors import ServiceError
-from bot.services.reminders import room_is_quiet
 from bot.services.shopping import ShoppingService
-from bot.utils.text import bold, esc
+from bot.utils.text import esc
 
 router = Router(name="shopping")
 
@@ -64,38 +63,16 @@ async def cmd_list(message: Message, session: AsyncSession, room: Room, t: Trans
     await message.answer(text, reply_markup=markup)  # type: ignore[arg-type]
 
 
-async def going_shopping(
-    bot: Bot, session: AsyncSession, room: Room, member: Member, notifier: Notifier
-) -> None:
-    """Tell the group chat and every other roommate (in private, outside quiet hours)."""
-    t = notifier.translator(room)
-    items = await ShoppingService(session).open_items(room)
-    listed = "\n".join(f"• {esc(item.text)}" for item in items) or t("list-empty")
-    name = bold(member.display_name)
-    await notifier.send_group(room, t("shopping-going", name=name, list=listed))
-    if room_is_quiet(room, utcnow()):
-        return
-    for roommate in await MemberRepo(session).list(room.id):
-        if roommate.id == member.id or not roommate.user.dm_available:
-            continue
-        with suppress(TelegramAPIError):
-            await bot.send_message(
-                roommate.telegram_user_id,
-                t("shopping-going-dm", name=name, room=esc(room.name), list=listed),
-            )
-
-
 @router.message(Command("shop"), flags={"require": "member"})
 async def cmd_shop(
     message: Message,
-    bot: Bot,
     session: AsyncSession,
     room: Room,
     member: Member,
     t: Translator,
     notifier: Notifier,
 ) -> None:
-    await going_shopping(bot, session, room, member, notifier)
+    await going_shopping(session, notifier, room, member)
     if message.chat.id != room.chat_id:
         await message.reply(t("shopping-going-sent"))
 
@@ -104,7 +81,6 @@ async def cmd_shop(
 async def on_shop_button(
     callback: CallbackQuery,
     callback_data: ShopCb,
-    bot: Bot,
     session: AsyncSession,
     room: Room,
     member: Member,
@@ -112,7 +88,7 @@ async def on_shop_button(
     notifier: Notifier,
 ) -> None:
     if callback_data.action == "going":
-        await going_shopping(bot, session, room, member, notifier)
+        await going_shopping(session, notifier, room, member)
         await callback.answer(t("shopping-going-sent"))
         return
     if callback_data.action == "bought":

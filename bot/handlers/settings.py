@@ -20,10 +20,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.config import SUPPORTED_LANGUAGES
 from bot.db.models import Category, Room
 from bot.db.repositories import CategoryRepo, MemberRepo
-from bot.handlers.common import ANSWER, can_manage, default_category_names
-from bot.i18n import I18n, Translator
+from bot.handlers.common import ANSWER
+from bot.i18n import I18n, Translator, default_category_names
 from bot.keyboards import settings as kb
 from bot.keyboards.callbacks import SettingsCb
+from bot.permissions import can_manage
 from bot.services.categories import CategoryService
 from bot.services.clock import utcnow
 from bot.services.errors import ServiceError

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from contextlib import suppress
-from datetime import date, timedelta
+from datetime import date
 
 from aiogram import Router
 from aiogram.exceptions import TelegramAPIError
@@ -13,17 +13,18 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, ForceReply, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.announcements import away_text, back_text
 from bot.db.models import Member, Room
 from bot.handlers.common import ANSWER
 from bot.i18n import Translator
 from bot.keyboards.callbacks import AwayCb
 from bot.keyboards.common import away_keyboard, back_home_keyboard
 from bot.notifications import Notifier
-from bot.services.away import AwayService, is_away
+from bot.services.away import AwayService, is_away, until_for_days
 from bot.services.clock import local_date, utcnow
 from bot.services.errors import ServiceError
 from bot.utils.parsing import format_date, parse_date
-from bot.utils.text import bold, mention
+from bot.utils.text import mention
 
 router = Router(name="away")
 
@@ -47,7 +48,7 @@ async def _go_away(
 ) -> str:
     """Switch the mode on; returns the text for the chat where it was requested."""
     await AwayService(session).go_away(room, member, until, utcnow())
-    announcement = t("away-set", name=bold(member.display_name), date=format_date(until))
+    announcement = away_text(t, member, until)
     if chat_id == room.chat_id:
         return announcement
     await notifier.send_group(room, announcement)
@@ -64,7 +65,7 @@ async def _come_back(
 ) -> str:
     if not await AwayService(session).come_back(room, member, utcnow()):
         return t("back-not-away")
-    announcement = t("back-done", name=bold(member.display_name))
+    announcement = back_text(t, member)
     if chat_id == room.chat_id:
         return announcement
     await notifier.send_group(room, announcement)
@@ -145,7 +146,7 @@ async def on_away_button(
 
     try:
         if callback_data.action == "days" and 1 <= callback_data.value <= 366:
-            until = _today(room) + timedelta(days=callback_data.value - 1)
+            until = until_for_days(_today(room), callback_data.value)
             text = await _go_away(session, room, member, until, t, notifier, chat_id)
         elif callback_data.action == "back":
             text = await _come_back(session, room, member, t, notifier, chat_id)

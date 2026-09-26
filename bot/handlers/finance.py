@@ -13,9 +13,16 @@ from aiogram.types import CallbackQuery, ForceReply, Message
 from aiogram.types import User as TgUser
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.announcements import (
+    amount_saved_text,
+    amount_text,
+    announce_achievements,
+    expense_text,
+    settle_text,
+)
 from bot.db.models import CategoryKind, Duty, Member, Room
 from bot.db.repositories import CategoryRepo, DutyRepo, MemberRepo, RoomRepo
-from bot.handlers.common import ANSWER, announce_achievements
+from bot.handlers.common import ANSWER
 from bot.i18n import Translator
 from bot.keyboards.callbacks import AmountCb, ExpenseCb, SettleCb
 from bot.keyboards.money import amount_keyboard, balance_keyboard, expense_split_keyboard
@@ -23,9 +30,9 @@ from bot.notifications import Notifier
 from bot.render import balance_text
 from bot.services.clock import local_date, utcnow
 from bot.services.errors import ServiceError
-from bot.services.finance import FinanceService, split_equally
+from bot.services.finance import FinanceService
 from bot.utils.money import format_money, parse_amount
-from bot.utils.text import bold, esc, mention
+from bot.utils.text import esc, mention
 
 router = Router(name="finance")
 
@@ -137,25 +144,9 @@ async def input_amount(
         return
     await state.clear()
     t = notifier.translator(room)
-    share = split_equally(cents, [s.member_id for s in expense.shares])
-    text = t(
-        "amount-saved",
-        amount=format_money(cents, room.currency),
-        category=esc(category.title),
-        count=len(share),
-        share=format_money(min(share.values()), room.currency),
-    )
-    await message.reply(text)
+    await message.reply(amount_saved_text(t, room, category, expense))
     if message.chat.id != room.chat_id:
-        await notifier.send_group(
-            room,
-            t(
-                "amount-group",
-                name=bold(payer.display_name),
-                amount=format_money(cents, room.currency),
-                category=esc(category.title),
-            ),
-        )
+        await notifier.send_group(room, amount_text(t, room, category, payer, cents))
     await announce_achievements(session, notifier, room, payer)
 
 
@@ -291,14 +282,7 @@ async def on_expense_button(
         await state.clear()
         await callback.answer(t("toast-saved"))
         names = {m.id: m.display_name for m in roommates}
-        text = t(
-            "expense-saved",
-            name=bold(member.display_name),
-            amount=format_money(expense.amount_cents, room.currency),
-            description=esc(expense.description or "—"),
-            names=esc(", ".join(names.get(s.member_id, "?") for s in expense.shares)),
-            share=format_money(min(s.amount_cents for s in expense.shares), room.currency),
-        )
+        text = expense_text(t, room, member, expense, names)
         with suppress(TelegramAPIError):
             await message.edit_text(text)
         if message.chat.id != room.chat_id:
@@ -353,12 +337,14 @@ async def on_settle(
     t: Translator,
     notifier: Notifier,
 ) -> None:
-    if member.id not in (callback_data.debtor_id, callback_data.creditor_id):
-        await callback.answer(t("err-settle-not-yours"), show_alert=True)
-        return
     try:
         expense = await FinanceService(session).settle_debt(
-            room, callback_data.debtor_id, callback_data.creditor_id, callback_data.cents, utcnow()
+            room,
+            callback_data.debtor_id,
+            callback_data.creditor_id,
+            callback_data.cents,
+            utcnow(),
+            actor=member,
         )
     except ServiceError as error:
         await callback.answer(t(error.key, **error.args_), show_alert=True)
@@ -367,15 +353,7 @@ async def on_settle(
     members = MemberRepo(session)
     debtor = await members.get(callback_data.debtor_id)
     creditor = await members.get(callback_data.creditor_id)
-    await notifier.send_group(
-        room,
-        t(
-            "settle-done",
-            debtor=bold(debtor.display_name if debtor else "?"),
-            creditor=bold(creditor.display_name if creditor else "?"),
-            amount=format_money(expense.amount_cents, room.currency),
-        ),
-    )
+    await notifier.send_group(room, settle_text(t, room, debtor, creditor, expense.amount_cents))
     if isinstance(callback.message, Message):
         text, markup = await _balance_view(session, room, t)
         with suppress(TelegramAPIError):

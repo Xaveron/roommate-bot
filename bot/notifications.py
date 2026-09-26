@@ -10,12 +10,14 @@ from contextlib import suppress
 from datetime import datetime
 
 from aiogram import Bot
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
 from aiogram.exceptions import (
     TelegramAPIError,
     TelegramBadRequest,
     TelegramForbiddenError,
 )
-from aiogram.types import InlineKeyboardMarkup, Message
+from aiogram.types import InlineKeyboardMarkup, Message, ReplyParameters
 
 from bot.db.models import Assignment, AssignmentStatus, Room
 from bot.i18n import I18n, Translator
@@ -27,6 +29,14 @@ logger = logging.getLogger(__name__)
 
 
 NUDGE_VARIANTS = 3
+
+
+def create_bot(token: str) -> Bot:
+    """Bot API client with the project defaults: HTML texts, no link previews."""
+    return Bot(
+        token=token,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML, link_preview_is_disabled=True),
+    )
 
 
 def reminder_text(
@@ -61,11 +71,23 @@ class Notifier:
         return (await self.bot.me()).username or ""
 
     async def send_group(
-        self, room: Room, text: str, markup: InlineKeyboardMarkup | None = None
+        self,
+        room: Room,
+        text: str,
+        markup: InlineKeyboardMarkup | None = None,
+        *,
+        reply_to: int | None = None,
     ) -> Message | None:
         """Post into the room's group chat; never raises."""
+        reply = (
+            ReplyParameters(message_id=reply_to, allow_sending_without_reply=True)
+            if reply_to is not None
+            else None
+        )
         try:
-            return await self.bot.send_message(room.chat_id, text, reply_markup=markup)
+            return await self.bot.send_message(
+                room.chat_id, text, reply_markup=markup, reply_parameters=reply
+            )
         except TelegramForbiddenError:
             logger.warning(
                 "Bot was removed from chat %s, deactivating room %s", room.chat_id, room.id
@@ -138,6 +160,26 @@ class Notifier:
             await self.bot.edit_message_reply_markup(
                 chat_id=assignment.message_chat_id, message_id=assignment.message_id
             )
+
+    async def update_reminder(self, assignment: Assignment) -> None:
+        """Show the new state of a turn (and its buttons) in the reminder message.
+
+        Used when the member answered somewhere else, e.g. "I'll buy it" in the Mini App.
+        """
+        if assignment.message_chat_id is None or assignment.message_id is None:
+            return
+        room = assignment.category.room
+        t = self.translator(room)
+        in_group = assignment.message_chat_id == room.chat_id
+        try:
+            await self.bot.edit_message_text(
+                text=reminder_text(t, assignment, with_room=not in_group),
+                chat_id=assignment.message_chat_id,
+                message_id=assignment.message_id,
+                reply_markup=turn_keyboard(t, assignment),
+            )
+        except TelegramAPIError:
+            logger.debug("Could not edit reminder message of assignment %s", assignment.id)
 
     async def close_reminder(self, assignment: Assignment, note: str) -> None:
         """Replace the reminder message with a final note (e.g. somebody else did it)."""

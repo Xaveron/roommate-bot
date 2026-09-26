@@ -11,14 +11,17 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.db.models import Category, Member, Room
-from bot.db.repositories import AssignmentRepo
-from bot.handlers.common import (
+from bot.announcements import (
     announce_achievements,
+    announce_decline,
     completion_markup,
     completion_text,
-    name_of,
+    declined_note,
+    publish_completion,
+    remember_announcement,
 )
+from bot.db.models import Category, Member, Room
+from bot.db.repositories import AssignmentRepo
 from bot.handlers.finance import offer_amount
 from bot.i18n import I18n, Translator
 from bot.keyboards.callbacks import DoneCb, TurnCb
@@ -27,7 +30,6 @@ from bot.notifications import Notifier, reminder_text
 from bot.services.categories import CategoryService
 from bot.services.clock import utcnow
 from bot.services.errors import ServiceError
-from bot.services.reminders import room_is_quiet
 from bot.services.tasks import Completion, TaskService
 from bot.utils.text import bold, esc
 
@@ -88,25 +90,9 @@ async def on_turn_button(
             case "decline":
                 handover = await service.decline(assignment.id, user_id, now)
                 await callback.answer(t("toast-declined"))
-                next_assignment = handover.next_assignment
-                next_member = next_assignment.member if next_assignment else None
                 text = reminder_text(t, assignment, with_room=not in_group)
-                await _edit(
-                    callback, f"{text}\n\n{t('turn-declined', next=name_of(next_member, t))}"
-                )
-                key = "group-declined" if next_member else "group-declined-nobody"
-                await notifier.send_group(
-                    room,
-                    t(
-                        key,
-                        name=bold(assignment.member.display_name),
-                        emoji=assignment.category.emoji,
-                        category=esc(assignment.category.name),
-                        next=name_of(next_member, t),
-                    ),
-                )
-                if next_assignment is not None and not room_is_quiet(room, now):
-                    await notifier.deliver_reminder(next_assignment, now)
+                await _edit(callback, f"{text}\n\n{declined_note(t, handover)}")
+                await announce_decline(notifier, handover, now)
             case _:
                 await callback.answer()
     except ServiceError as error:
@@ -146,16 +132,14 @@ async def _announce_completion(
     *,
     in_group: bool,
 ) -> None:
-    room = completion.category.room
-    announcement = completion_text(t, completion)
-    markup = completion_markup(t, completion)
     if in_group:
-        await _edit(callback, announcement, markup)
+        await _edit(callback, completion_text(t, completion), completion_markup(t, completion))
+        remember_announcement(completion.duty, callback.message)  # type: ignore[arg-type]
     else:
         if completion.assignment is not None:
             text = reminder_text(t, completion.assignment)
             await _edit(callback, f"{text}\n\n{t('turn-done')}")
-        await notifier.send_group(room, announcement, markup)
+        await publish_completion(notifier, completion, close_own_reminder=False)
 
 
 @router.message(Command("done"), flags={"require": "member"})
@@ -181,7 +165,9 @@ async def cmd_done(
             completion, text, markup = await _mark_done(
                 session, room, category, member, t, notifier, message.chat.id
             )
-            await message.reply(text, reply_markup=markup)
+            reply = await message.reply(text, reply_markup=markup)
+            if message.chat.id == room.chat_id:
+                remember_announcement(completion.duty, reply)
             await _after_completion(
                 bot,
                 session,
@@ -228,6 +214,8 @@ async def on_done_picked(
     )
     await callback.answer(t("toast-done"))
     await _edit(callback, text, markup)
+    if chat_id == room.chat_id:
+        remember_announcement(completion.duty, callback.message)  # type: ignore[arg-type]
     await _after_completion(
         bot, session, state, notifier, t, completion, chat_id, in_group=chat_id == room.chat_id
     )
@@ -244,14 +232,12 @@ async def _mark_done(
 ) -> tuple[Completion, str, InlineKeyboardMarkup | None]:
     """Record the chore; returns the text (and buttons) for the chat where it was requested."""
     completion = await TaskService(session).mark_done(category, member, utcnow())
-    if completion.covered is not None:
-        await notifier.close_reminder(
-            completion.covered, t("turn-covered", name=bold(member.display_name))
-        )
-    announcement = completion_text(t, completion)
-    markup = completion_markup(t, completion)
     if chat_id == room.chat_id:
-        return completion, announcement, markup
-    await notifier.send_group(room, announcement, markup)
+        if completion.covered is not None:
+            await notifier.close_reminder(
+                completion.covered, t("turn-covered", name=bold(member.display_name))
+            )
+        return completion, completion_text(t, completion), completion_markup(t, completion)
+    await publish_completion(notifier, completion)
     confirm = t("done-private-confirm", emoji=category.emoji, category=esc(category.name))
     return completion, confirm, None

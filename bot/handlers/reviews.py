@@ -9,14 +9,14 @@ from aiogram.exceptions import TelegramAPIError
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.db.models import Member, ReviewStatus, Vote
+from bot.announcements import review_note
+from bot.db.models import Member, Vote
 from bot.i18n import Translator
 from bot.keyboards.callbacks import VoteCb
 from bot.keyboards.common import vote_keyboard
 from bot.services.clock import utcnow
 from bot.services.errors import ServiceError
 from bot.services.reviews import ReviewService
-from bot.utils.text import bold
 
 router = Router(name="reviews")
 
@@ -50,11 +50,7 @@ async def on_vote(
                 )
         return
 
-    performer = bold(outcome.duty.member.display_name)
-    if outcome.decided == ReviewStatus.DISPUTED:
-        note = t("review-disputed", name=performer)
-    else:
-        note = t("review-confirmed", name=performer)
+    note = review_note(t, outcome)
     await callback.answer(t("toast-vote-saved"))
     if message is not None:
         with suppress(TelegramAPIError):

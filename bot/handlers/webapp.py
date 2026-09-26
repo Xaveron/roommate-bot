@@ -11,8 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.config import Settings
 from bot.db.models import Room, User
-from bot.db.repositories import MemberRepo
+from bot.db.repositories import MemberRepo, RoomRepo
 from bot.i18n import Translator
+from bot.permissions import is_in_chat
 from bot.utils.text import esc
 
 router = Router(name="webapp")
@@ -60,16 +61,29 @@ async def cmd_app(
 async def start_app_deep_link(
     message: Message,
     command: CommandObject,
+    bot: Bot,
     session: AsyncSession,
     user: User,
     room: Room | None,
     settings: Settings,
     t: Translator,
 ) -> None:
-    """t.me/<bot>?start=app_<room id>: make that room active and offer the Mini App."""
+    """t.me/<bot>?start=app_<room id>: make that room active and offer the Mini App.
+
+    Somebody from the room's group chat who hasn't joined yet can join in the Mini App.
+    """
     rooms = await MemberRepo(session).rooms_of_user(user.id)
     wanted = int(command.args.split("_")[1]) if command.args and "_" in command.args else None
-    target = next((r for r in rooms if r.id == wanted), None) or room
+    target = next((r for r in rooms if r.id == wanted), None)
+    if target is None and wanted is not None and settings.webapp_url:
+        other = await RoomRepo(session).get(wanted)
+        if other is not None and other.is_active and await is_in_chat(bot, other, user.id):
+            await message.answer(
+                t("webapp-open-join", room=esc(other.name)),
+                reply_markup=webapp_keyboard(t, settings.webapp_url, other.id),
+            )
+            return
+    target = target or room
     if target is None:
         await message.answer(t("err-no-room-private"))
         return

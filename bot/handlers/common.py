@@ -2,26 +2,9 @@
 
 from __future__ import annotations
 
-import logging
-from collections.abc import Mapping
-
-from aiogram import Bot, F
-from aiogram.enums import ChatMemberStatus, ChatType
-from aiogram.exceptions import TelegramAPIError
-from aiogram.types import Chat, InlineKeyboardMarkup, Message
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from bot.db.models import CategoryKind, Member, Room
-from bot.i18n import I18n, Translator
-from bot.keyboards.common import vote_keyboard
-from bot.notifications import Notifier
-from bot.render import achievement_earned_text
-from bot.services.achievements import AchievementService
-from bot.services.clock import utcnow
-from bot.services.tasks import Completion
-from bot.utils.text import bold, esc
-
-logger = logging.getLogger(__name__)
+from aiogram import F
+from aiogram.enums import ChatType
+from aiogram.types import Chat, Message
 
 MAX_MESSAGE_LENGTH = 4000
 
@@ -31,60 +14,6 @@ ANSWER = F.text & ~F.text.startswith("/")
 
 def is_group(chat: Chat | None) -> bool:
     return chat is not None and chat.type in (ChatType.GROUP, ChatType.SUPERGROUP)
-
-
-async def can_manage(bot: Bot, room: Room, user_id: int) -> bool:
-    """Room settings may be changed by the room creator and by chat admins."""
-    if room.created_by == user_id:
-        return True
-    try:
-        chat_member = await bot.get_chat_member(room.chat_id, user_id)
-    except TelegramAPIError:
-        logger.warning("Cannot check admin rights of %s in %s", user_id, room.chat_id)
-        return False
-    return chat_member.status in (ChatMemberStatus.CREATOR, ChatMemberStatus.ADMINISTRATOR)
-
-
-def default_category_names(i18n: I18n, language: str) -> Mapping[str, str]:
-    t = i18n.get(language)
-    return {
-        kind: t("category-default-name", kind=kind)
-        for kind in (CategoryKind.BREAD, CategoryKind.WATER, CategoryKind.TRASH)
-    }
-
-
-def name_of(member: Member | None, t: Translator) -> str:
-    return bold(member.display_name) if member is not None else t("nobody")
-
-
-def completion_text(t: Translator, completion: Completion) -> str:
-    category = completion.category
-    key = "group-done" if completion.in_turn else "group-out-of-turn"
-    lines = [
-        t(
-            key,
-            emoji=category.emoji,
-            category=esc(category.name),
-            name=bold(completion.member.display_name),
-        )
-    ]
-    if completion.next_member is not None:
-        lines.append(t("group-next", name=bold(completion.next_member.display_name)))
-    return "\n".join(lines)
-
-
-def completion_markup(t: Translator, completion: Completion) -> InlineKeyboardMarkup | None:
-    """👍 / 🤨 buttons, unless nobody else lives in the room."""
-    return vote_keyboard(t, completion.duty.id) if completion.voters > 0 else None
-
-
-async def announce_achievements(
-    session: AsyncSession, notifier: Notifier, room: Room, member: Member
-) -> None:
-    """Award newly earned badges and congratulate in the group chat."""
-    t = notifier.translator(room)
-    for code in await AchievementService(session).evaluate(member, utcnow()):
-        await notifier.send_group(room, achievement_earned_text(t, member, code))
 
 
 def split_long(text: str, limit: int = MAX_MESSAGE_LENGTH) -> list[str]:

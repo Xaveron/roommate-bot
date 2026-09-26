@@ -280,6 +280,7 @@ err-no-days = E nevoie de cel puțin o zi.
 err-bad-time = Nu am înțeles ora. Exemplu: 18:30
 err-bad-time-range = Nu am înțeles intervalul. Exemplu: 23:00-08:00
 err-bad-timezone = Nu cunosc acest fus orar. Exemplu: Europe/Chisinau
+err-turn-changed = Rândul tocmai s-a schimbat — verifică din nou 🙂
 
 ## Administrare
 
@@ -571,4 +572,11 @@ btn-webapp = 📱 Aplicația
 webapp-open = 📱 Rândul, istoricul, balanța și statistica „{ $room }” — în aplicație:
 webapp-open-private = 📱 Aplicația se deschide în privat — apasă butonul de mai jos.
 btn-webapp-private = 💬 Deschide în privat
+webapp-open-join = 📱 Încă nu te-ai înscris în „{ $room }”. Deschide aplicația — acolo poți intra în cameră.
 webapp-not-configured = Aplicația nu e încă conectată.
+app-away-set = 🏖 Gata: te sar în rânduri până pe { $date } inclusiv.
+app-category-added = ✅ Categoria { $title } a fost adăugată! Memento la { $time }, în fiecare zi.
+app-left = 👋 Nu mai locuiești în „{ $room }”. Istoricul rămâne.
+app-member-removed = 🚪 { $name } nu mai e în cameră. Rândurile au fost actualizate.
+app-export-sent = 📦 Ți-am trimis fișierele CSV în privat.
+err-dm-needed = Nu-ți pot scrie în privat — deschide botul, apasă „Start” și încearcă din nou.
