@@ -27,6 +27,7 @@ from aiogram.methods import (
     SendMediaGroup,
     SendMessage,
     SendPhoto,
+    SetChatMenuButton,
     SetMyCommands,
     TelegramMethod,
 )
@@ -104,7 +105,11 @@ class FakeSession(BaseSession):
                     return ChatMemberOwner(user=ANYA, is_anonymous=False)
                 return ChatMemberMember(user=BORYA)
             case (
-                AnswerCallbackQuery() | SetMyCommands() | EditMessageReplyMarkup() | DeleteMessage()
+                AnswerCallbackQuery()
+                | SetMyCommands()
+                | SetChatMenuButton()
+                | EditMessageReplyMarkup()
+                | DeleteMessage()
             ):
                 return True
         raise AssertionError(f"Unexpected API call: {type(method).__name__}")
@@ -133,7 +138,7 @@ class FakeSession(BaseSession):
 
 
 class Harness:
-    def __init__(self, db: Database) -> None:
+    def __init__(self, db: Database, **settings_overrides: Any) -> None:
         self.session = FakeSession(forbidden_chats={BORYA.id})
         self.bot = Bot(
             "42:TEST",
@@ -143,7 +148,8 @@ class Harness:
         self.db = db
         self.i18n = I18n()
         self.notifier = Notifier(self.bot, self.i18n)
-        settings = Settings(bot_token="42:TEST", admin_ids=[])  # type: ignore[arg-type]
+        settings = Settings(bot_token="42:TEST", admin_ids=[], **settings_overrides)  # type: ignore[arg-type]
+        self.settings = settings
         self.dp = build_dispatcher(settings, db, self.i18n, self.notifier)
         self.update_ids = itertools.count(1)
         self.message_ids = itertools.count(1)
@@ -434,3 +440,54 @@ async def test_stage_three_flow(harness: Harness, db: Database, monkeypatch):
     assert len(summaries) == 1
 
     assert not [r for r in h.session.sent() if "Что-то пошло не так" in r.text]
+
+
+async def test_mini_app_entry_points(db: Database):
+    h = Harness(db, webapp_url="https://194-62-105-206.sslip.io")
+    try:
+        await h.message(ANYA, "/start")
+        await h.press(ANYA, JoinCb().pack())
+        async with db.session() as session:
+            room = await RoomRepo(session).get_by_chat_id(GROUP.id)
+            assert room is not None
+            room_id = room.id
+
+        # Private chat: a web_app button that opens the Mini App on this room.
+        await h.message(ANYA, "/app", chat=private(ANYA))
+        button = h.session.sent(ANYA.id)[-1].reply_markup.inline_keyboard[0][0]
+        assert button.web_app.url == f"https://194-62-105-206.sslip.io/?room={room_id}"
+
+        # Group chat: web_app buttons aren't allowed there, so a deep link to private chat.
+        await h.message(ANYA, "/app")
+        link = h.session.sent(GROUP.id)[-1].reply_markup.inline_keyboard[0][0]
+        assert link.url == f"https://t.me/roommate_test_bot?start=app_{room_id}"
+
+        # The deep link itself.
+        await h.message(ANYA, f"/start app_{room_id}", chat=private(ANYA))
+        reply = h.session.sent(ANYA.id)[-1]
+        assert reply.reply_markup.inline_keyboard[0][0].web_app.url.endswith(f"?room={room_id}")
+
+        # Plain /start in private shows the app button first.
+        await h.message(ANYA, "/start", chat=private(ANYA))
+        first = h.session.sent(ANYA.id)[-1].reply_markup.inline_keyboard[0][0]
+        assert first.web_app.url == "https://194-62-105-206.sslip.io/"
+
+        # Menu button next to the input field.
+        from bot.commands import set_menu_button
+
+        await set_menu_button(h.bot, h.i18n, h.settings)
+        (menu,) = h.session.of(SetChatMenuButton)
+        assert menu.menu_button.web_app.url == "https://194-62-105-206.sslip.io/"
+        assert menu.menu_button.text == "📱 Приложение"
+    finally:
+        for root in h.dp.sub_routers:
+            for router in root.sub_routers:
+                router._parent_router = None
+
+
+async def test_app_command_without_webapp_url(harness: Harness):
+    h = harness
+    await h.message(ANYA, "/start")
+    await h.press(ANYA, JoinCb().pack())
+    await h.message(ANYA, "/app")
+    assert "не подключено" in h.session.sent(GROUP.id)[-1].text

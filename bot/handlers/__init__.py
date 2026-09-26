@@ -13,6 +13,7 @@ from bot.handlers import (
     start,
     stats,
     tasks,
+    webapp,
 )
 
 
@@ -24,6 +25,7 @@ def build_router() -> Router:
         settings.router,  # FSM answers must be matched before anything else
         away.router,
         finance.router,  # its FSM answers too
+        webapp.router,  # /start app_<room> must win over the generic /start
         start.router,
         tasks.router,
         reviews.router,

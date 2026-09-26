@@ -74,6 +74,22 @@ class DutyRepo(Repository):
         result = await self.session.scalars(query.order_by(Duty.created_at, Duty.id))
         return result.all()
 
+    async def recent_for_room(
+        self, room_id: int, *, limit: int, category_id: int | None = None
+    ) -> Sequence[Duty]:
+        """Newest records of a room (optionally of one category)."""
+        query = (
+            select(Duty)
+            .join(Category, Category.id == Duty.category_id)
+            .where(Category.room_id == room_id)
+        )
+        if category_id is not None:
+            query = query.where(Duty.category_id == category_id)
+        result = await self.session.scalars(
+            query.order_by(Duty.created_at.desc(), Duty.id.desc()).limit(limit)
+        )
+        return result.all()
+
     async def list_for_member(self, member_id: int) -> Sequence[Duty]:
         result = await self.session.scalars(
             select(Duty).where(Duty.member_id == member_id).order_by(Duty.created_at, Duty.id)

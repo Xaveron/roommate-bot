@@ -26,6 +26,13 @@ class Settings(BaseSettings):
     scheduler_tick_seconds: int = Field(default=60, ge=10, le=600)
     # Apply Alembic migrations automatically on startup.
     auto_migrate: bool = True
+    # Public HTTPS address of the Mini App, e.g. https://194-62-105-206.sslip.io.
+    # When empty the bot doesn't offer the Mini App.
+    webapp_url: str | None = None
+    # How long a Mini App session (Telegram initData) stays valid, in seconds.
+    webapp_initdata_max_age: int = Field(default=86400, ge=60)
+    # Built frontend served by the API (webapp/dist after `npm run build`).
+    webapp_dist: str = "webapp/dist"
 
     @field_validator("admin_ids", mode="before")
     @classmethod
@@ -34,6 +41,17 @@ class Settings(BaseSettings):
             return [int(part) for part in value.replace(" ", "").split(",") if part]
         if isinstance(value, int):
             return [value]
+        return value
+
+    @field_validator("webapp_url", mode="before")
+    @classmethod
+    def _check_webapp_url(cls, value: object) -> object:
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return None
+        if isinstance(value, str):
+            value = value.strip().rstrip("/")
+            if not value.startswith("https://"):
+                raise ValueError("WEBAPP_URL must start with https:// (Telegram requirement)")
         return value
 
     @field_validator("default_timezone")

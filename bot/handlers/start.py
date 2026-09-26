@@ -13,7 +13,7 @@ from aiogram.filters import (
     Command,
     CommandStart,
 )
-from aiogram.types import CallbackQuery, ChatMemberUpdated, Message
+from aiogram.types import CallbackQuery, ChatMemberUpdated, Message, WebAppInfo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -126,12 +126,20 @@ async def group_migrated(message: Message, session: AsyncSession) -> None:
 
 @router.message(CommandStart(), PRIVATE_CHAT)
 async def start_in_private(
-    message: Message, bot: Bot, session: AsyncSession, user: User, t: Translator
+    message: Message,
+    bot: Bot,
+    session: AsyncSession,
+    user: User,
+    settings: Settings,
+    t: Translator,
 ) -> None:
     rooms = await MemberRepo(session).rooms_of_user(user.id)
     username = (await bot.me()).username or ""
     builder = InlineKeyboardBuilder()
+    if rooms and settings.webapp_url:
+        builder.button(text=t("btn-webapp"), web_app=WebAppInfo(url=f"{settings.webapp_url}/"))
     builder.button(text=t("btn-add-to-group"), url=f"https://t.me/{username}?startgroup=room")
+    builder.adjust(1)
     if rooms:
         names = "\n".join(f"• {esc(room.name)}" for room in rooms)
         text = t("start-private-with-rooms", name=bold(user.first_name), rooms=names)

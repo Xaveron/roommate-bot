@@ -85,6 +85,7 @@ help-group =
     /buy salt — add to the shopping list · /list — the list · /shop — “going to the shop”
     /expense — shared expense · /balance — who owes whom
     /stats — statistics and chart · /top — leaderboard and achievements · /export — CSV
+    /app — the app: tables, balance and charts
     /members — who lives in the room
     /leave — leave the room
     /cancel — cancel input
@@ -102,6 +103,7 @@ help-private =
     /buy, /list — shopping list
     /expense, /balance — expenses and debts
     /stats, /top — statistics and leaderboard
+    /app — the room app
     /room — pick a room (if you have several)
 
     Settings and new categories live in the room's group chat.
@@ -307,6 +309,7 @@ cmd-description = { $command ->
     [away] I'm away — skip me in queues
     [back] Back in the queues
     [room] Pick a room
+    [app] The room app
    *[help] Help
   }
 
@@ -559,3 +562,11 @@ expense-type = { $settlement ->
    *[false] expense
   }
 export-expenses-filename = expenses
+
+## Mini App
+
+btn-webapp = 📱 App
+webapp-open = 📱 Queue, history, balance and statistics of “{ $room }” — in the app:
+webapp-open-private = 📱 The app opens in private chat — tap the button below.
+btn-webapp-private = 💬 Open in private chat
+webapp-not-configured = The app isn't connected yet.

@@ -7,8 +7,12 @@ from aiogram.types import (
     BotCommand,
     BotCommandScopeAllGroupChats,
     BotCommandScopeAllPrivateChats,
+    MenuButtonCommands,
+    MenuButtonWebApp,
+    WebAppInfo,
 )
 
+from bot.config import Settings
 from bot.i18n import I18n
 
 GROUP_COMMANDS = (
@@ -28,6 +32,7 @@ GROUP_COMMANDS = (
     "stats",
     "top",
     "export",
+    "app",
     "members",
     "leave",
     "help",
@@ -43,6 +48,7 @@ PRIVATE_COMMANDS = (
     "balance",
     "stats",
     "top",
+    "app",
     "away",
     "back",
     "room",
@@ -64,3 +70,16 @@ async def set_bot_commands(bot: Bot, i18n: I18n) -> None:
                 for name in names
             ]
             await bot.set_my_commands(commands, scope=scope, language_code=language_code)
+
+
+async def set_menu_button(bot: Bot, i18n: I18n, settings: Settings) -> None:
+    """The button next to the message field in private chats opens the Mini App."""
+    if settings.webapp_url:
+        t = i18n.get(settings.default_language)
+        await bot.set_chat_menu_button(
+            menu_button=MenuButtonWebApp(
+                text=t("btn-webapp"), web_app=WebAppInfo(url=f"{settings.webapp_url}/")
+            )
+        )
+    else:
+        await bot.set_chat_menu_button(menu_button=MenuButtonCommands())

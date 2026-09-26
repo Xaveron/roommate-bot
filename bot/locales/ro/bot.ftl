@@ -85,6 +85,7 @@ help-group =
     /buy sare — în lista de cumpărături · /list — lista · /shop — „merg la magazin”
     /expense — cheltuială comună · /balance — cine cui datorează
     /stats — statistică și grafic · /top — clasament și realizări · /export — CSV
+    /app — aplicația: tabele, balanță și grafice
     /members — cine locuiește în cameră
     /leave — ieși din cameră
     /cancel — anulează introducerea
@@ -102,6 +103,7 @@ help-private =
     /buy, /list — lista de cumpărături
     /expense, /balance — cheltuieli și datorii
     /stats, /top — statistică și clasament
+    /app — aplicația camerei
     /room — alege camera (dacă ai mai multe)
 
     Setările și categoriile noi — în grupul camerei.
@@ -307,6 +309,7 @@ cmd-description = { $command ->
     [away] Plec — sări-mă în rânduri
     [back] Revin în rânduri
     [room] Alege camera
+    [app] Aplicația camerei
    *[help] Ajutor
   }
 
@@ -561,3 +564,11 @@ expense-type = { $settlement ->
    *[false] cheltuială
   }
 export-expenses-filename = cheltuieli
+
+## Mini App
+
+btn-webapp = 📱 Aplicația
+webapp-open = 📱 Rândul, istoricul, balanța și statistica „{ $room }” — în aplicație:
+webapp-open-private = 📱 Aplicația se deschide în privat — apasă butonul de mai jos.
+btn-webapp-private = 💬 Deschide în privat
+webapp-not-configured = Aplicația nu e încă conectată.

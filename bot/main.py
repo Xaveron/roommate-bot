@@ -12,7 +12,7 @@ from aiogram.exceptions import TelegramUnauthorizedError
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from bot import migrate
-from bot.commands import set_bot_commands
+from bot.commands import set_bot_commands, set_menu_button
 from bot.config import Settings, get_settings
 from bot.db import Database
 from bot.handlers import build_router
@@ -79,6 +79,7 @@ async def run() -> None:
         raise SystemExit(1) from None
     logger.info("Starting @%s", me.username)
     await set_bot_commands(bot, i18n)
+    await set_menu_button(bot, i18n, settings)
     scheduler.start()
     try:
         await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
