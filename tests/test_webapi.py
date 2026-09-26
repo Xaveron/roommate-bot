@@ -1,4 +1,4 @@
-"""Mini App backend: initData validation and the read-only API."""
+"""Mini App backend: initData validation and the reading side of the API."""
 
 from __future__ import annotations
 
