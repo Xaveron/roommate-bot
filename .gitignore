@@ -23,5 +23,6 @@ data/*
 .vscode/
 .DS_Store
 
-# Database dumps (production)
-backups/
+# Database dumps (production); the directory itself is kept so cron can log into it
+backups/*
+!backups/.gitkeep

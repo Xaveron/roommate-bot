@@ -196,8 +196,9 @@ before it (next section).
 ## 5. Backups and restore
 
 `scripts/backup_db.sh` writes a compressed `pg_dump` (custom format) to `backups/` and keeps
-the newest 14. Cron runs it daily at 03:30 server time and logs to `backups/backup.log`. Every
-dump is read back with `pg_restore --list` before it counts as done.
+the newest 14. Cron runs it daily at 03:30 server time (usually UTC, check with `timedatectl`)
+and logs to `backups/backup.log`. To run it at another time, edit `/etc/cron.d/roommate-backup`.
+Every dump is read back with `pg_restore --list` before it counts as done.
 
 ```bash
 ls -lh backups/                                  # available dumps

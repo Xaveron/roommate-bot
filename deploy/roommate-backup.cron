@@ -1,3 +1,4 @@
-# Daily PostgreSQL backup of RoomMate Bot at 03:30 (server time), keeps the last 14 dumps.
+# Daily PostgreSQL backup of RoomMate Bot at 03:30 server time (UTC on most VPS images),
+# keeps the last 14 dumps.
 # Install: sudo install -m 644 deploy/roommate-backup.cron /etc/cron.d/roommate-backup
 30 3 * * * deploy /opt/roommate-bot/scripts/backup_db.sh >> /opt/roommate-bot/backups/backup.log 2>&1
