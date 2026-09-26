@@ -2,10 +2,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { chooseRoom, chooseTab } from "../App";
 import { translator } from "../i18n";
-import type { BalanceData, HistoryData, Me, QueueData, StatsData } from "../types";
-import { BalanceSummary } from "../views/BalanceView";
+import type { BalanceData, HistoryData, Me, QueueCategory, QueueData, StatsData } from "../types";
+import { BalanceSummary, ExpenseForm } from "../views/BalanceView";
 import { HistoryTable } from "../views/HistoryView";
-import { QueueList } from "../views/QueueView";
+import { QueueList, turnActions } from "../views/QueueView";
+import { ShoppingList } from "../views/ShoppingView";
 import { StatsReport } from "../views/StatsView";
 
 const t = translator("ru");
@@ -17,6 +18,8 @@ describe("views", () => {
     const data: QueueData = {
       room,
       me_member_id: 2,
+      today: "2026-09-26",
+      away_max_days: 365,
       members: [
         { member_id: 1, name: "Аня" },
         { member_id: 2, name: "Боря" },
@@ -31,6 +34,7 @@ describe("views", () => {
           mode: "fair",
           reminder_time: "18:00",
           current: { member_id: 2, name: "Боря" },
+          assignment_id: 7,
           status: "pending",
           remind_on: null,
           upcoming: [{ member_id: 1, name: "Аня" }],
@@ -47,11 +51,18 @@ describe("views", () => {
     expect(html).toContain("Гриша 0 · Боря 1 · Аня 3");
     expect(html).toContain("справедливо");
     expect(html).toContain("до 15.10");
+    // Borya's turn after the reminder: the same four choices as in the bot.
+    expect(html).toContain("🛒 Куплю");
+    expect(html).toContain("🔄 Ещё есть");
+    expect(html).toContain("⏭ Не могу сегодня");
+    expect(html).toContain("✅ Готово");
+    expect(html).toContain("🏖 Уезжаю");
   });
 
   it("renders history rows in the room timezone and marks disputed ones", () => {
     const data: HistoryData = {
       room,
+      me_member_id: 1,
       categories: [bread],
       items: [
         {
@@ -63,6 +74,24 @@ describe("views", () => {
           review: "disputed",
           amount_cents: 2350,
           created_at: "2026-09-26T15:30:00Z",
+          votes_up: 0,
+          votes_down: 2,
+          my_vote: null,
+          can_vote: false,
+        },
+        {
+          id: 2,
+          category_id: 10,
+          member_id: 2,
+          member_name: "Боря",
+          status: "out_of_turn",
+          review: "open",
+          amount_cents: null,
+          created_at: "2026-09-26T16:00:00Z",
+          votes_up: 1,
+          votes_down: 0,
+          my_vote: "up",
+          can_vote: true,
         },
       ],
     };
@@ -74,12 +103,20 @@ describe("views", () => {
     expect(html).toContain("спорно");
     expect(html).toContain("23.50 MDL");
     expect(html).toContain('class="disputed"');
+    // Votes: buttons while voting is open, the caller's vote pressed.
+    expect(html).toMatch(/aria-pressed="true"[^>]*>👍 1</);
+    expect(html).toContain("🤨 0");
   });
 
   it("renders the balance from the caller's point of view", () => {
     const data: BalanceData = {
       room,
       me_member_id: 2,
+      members: [
+        { member_id: 1, name: "Аня", at_home: true },
+        { member_id: 2, name: "Боря", at_home: true },
+        { member_id: 3, name: "Вика", at_home: false },
+      ],
       balances: [
         { member_id: 1, name: "Аня", cents: 3000 },
         { member_id: 2, name: "Боря", cents: -3000 },
@@ -105,6 +142,58 @@ describe("views", () => {
     expect(html).toContain("30 MDL");
     expect(html).toContain("+30 MDL");
     expect(html).toContain("Делим на: Аня, Боря");
+    expect(html).toContain("Я вернул(а)"); // Borya is the debtor
+
+    const other = renderToStaticMarkup(<BalanceSummary data={{ ...data, me_member_id: 3 }} i18n={t} />);
+    expect(other).not.toContain("Я вернул(а)");
+    expect(other).not.toContain("Мне вернули");
+
+    // New expense: shared by whoever is at home by default.
+    const form = renderToStaticMarkup(<ExpenseForm data={data} i18n={t} busy={false} onSave={() => {}} />);
+    expect(form).toMatch(/aria-pressed="true"[^>]*>Аня</);
+    expect(form).toMatch(/aria-pressed="false"[^>]*>Вика 🏖</);
+  });
+
+  it("renders the shopping list", () => {
+    const html = renderToStaticMarkup(
+      <ShoppingList
+        data={{
+          room,
+          items: [{ id: 1, text: "соль", added_by: "Аня", created_at: "2026-09-26T21:30:00Z" }],
+        }}
+        i18n={t}
+        actions={null}
+      />,
+    );
+    expect(html).toContain("соль");
+    expect(html).toContain("Аня · 27.09"); // the room's local date
+    expect(html).toContain('aria-label="Купили: соль"');
+    const empty = renderToStaticMarkup(<ShoppingList data={{ room, items: [] }} i18n={t} actions={null} />);
+    expect(empty).toContain("Список пуст");
+  });
+
+  it("offers the same turn choices as the bot's reminder", () => {
+    const base: QueueCategory = {
+      id: 1,
+      name: "Хлеб",
+      emoji: "🍞",
+      kind: "bread",
+      mode: "round_robin",
+      reminder_time: "18:00",
+      current: { member_id: 5, name: "Я" },
+      assignment_id: 9,
+      status: "pending",
+      remind_on: null,
+      upcoming: [],
+      marks: [],
+      fair_counts: null,
+    };
+    expect(turnActions(base, 5)).toEqual(["accept", "done", "still", "decline"]);
+    expect(turnActions({ ...base, status: "accepted" }, 5)).toEqual(["done", "decline"]);
+    expect(turnActions({ ...base, status: "snoozed" }, 5)).toEqual(["done"]);
+    expect(turnActions({ ...base, assignment_id: null, status: "none" }, 5)).toEqual(["done"]);
+    expect(turnActions(base, 6)).toEqual(["outOfTurn"]);
+    expect(turnActions({ ...base, current: null }, 6)).toEqual(["outOfTurn"]);
   });
 
   it("renders statistics with the leaderboard", () => {

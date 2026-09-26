@@ -34,10 +34,11 @@ export function Async<T>({
   i18n: Translator;
   children: (data: T) => ReactNode;
 }) {
-  if (state.error) {
-    if (state.error instanceof ApiError && state.error.status === 401) {
-      return <Gate emoji="🔒" title={i18n.t("gate.auth.title")} text={i18n.t("gate.auth.text")} />;
-    }
+  if (state.error instanceof ApiError && state.error.status === 401) {
+    return <Gate emoji="🔒" title={i18n.t("gate.auth.title")} text={i18n.t("gate.auth.text")} />;
+  }
+  // A failed background refresh keeps showing the data loaded before.
+  if (state.error && state.data === undefined) {
     return (
       <div className="center">
         {i18n.t("common.error")}

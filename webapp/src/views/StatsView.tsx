@@ -27,7 +27,7 @@ export function StatsReport({
 }) {
   const shift = (delta: number) => {
     const index = data.year * 12 + (data.month - 1) + delta;
-    haptic();
+    haptic.select();
     onMonth(Math.floor(index / 12), (index % 12) + 1);
   };
   const title = `${i18n.t(`month.${data.month}` as Key)} ${data.year}`;

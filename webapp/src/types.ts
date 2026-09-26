@@ -1,4 +1,4 @@
-// Shapes returned by the FastAPI backend (bot/webapi/schemas.py).
+// Shapes of the FastAPI backend (bot/webapi/schemas.py).
 // Money is in cents, datetimes are UTC ISO strings, dates are YYYY-MM-DD.
 
 export interface Room {
@@ -15,6 +15,8 @@ export interface Me {
   language_code: string | null;
   rooms: Room[];
   initial_room_id: number | null;
+  /** A room the app was opened for that the caller may join (they are in its group chat). */
+  invite?: Room | null;
 }
 
 export interface Person {
@@ -38,6 +40,8 @@ export interface QueueCategory {
   mode: "round_robin" | "fair";
   reminder_time: string;
   current: Person | null;
+  /** The issued turn of the current member (after the reminder), if any. */
+  assignment_id: number | null;
   status: TurnStatus;
   remind_on: string | null;
   upcoming: Person[];
@@ -54,6 +58,9 @@ export interface Away {
 export interface QueueData {
   room: Room;
   me_member_id: number;
+  /** Today in the room's timezone (YYYY-MM-DD). */
+  today: string;
+  away_max_days: number;
   members: Person[];
   categories: QueueCategory[];
   away: Away[];
@@ -78,10 +85,15 @@ export interface Duty {
   review: "open" | "confirmed" | "disputed";
   amount_cents: number | null;
   created_at: string;
+  votes_up: number;
+  votes_down: number;
+  my_vote: "up" | "down" | null;
+  can_vote: boolean;
 }
 
 export interface HistoryData {
   room: Room;
+  me_member_id: number;
   categories: Category[];
   items: Duty[];
 }
@@ -110,9 +122,17 @@ export interface Expense {
   shares: { name: string; cents: number }[];
 }
 
+export interface Roommate {
+  member_id: number;
+  name: string;
+  /** Not away today: shares an expense by default. */
+  at_home: boolean;
+}
+
 export interface BalanceData {
   room: Room;
   me_member_id: number;
+  members: Roommate[];
   balances: BalanceLine[];
   transfers: Transfer[];
   expenses: Expense[];
@@ -141,4 +161,93 @@ export interface StatsData {
   disputed: number;
   spent_cents: number;
   daily: { day: string; done: number }[];
+}
+
+export interface ShoppingItem {
+  id: number;
+  text: string;
+  added_by: string | null;
+  created_at: string;
+}
+
+export interface ShoppingData {
+  room: Room;
+  items: ShoppingItem[];
+}
+
+/** Every action answers with a short confirmation in the room's language. */
+export interface ActionResult {
+  message: string;
+}
+
+export interface QuietHours {
+  /** "23:00" */
+  start: string;
+  end: string;
+}
+
+export interface CategorySettings {
+  id: number;
+  name: string;
+  emoji: string;
+  kind: string;
+  is_active: boolean;
+  /** "18:00" in the room's timezone. */
+  reminder_time: string;
+  /** 0 = Monday. */
+  reminder_days: number[];
+  mode: "round_robin" | "fair";
+}
+
+export interface MemberInfo {
+  member_id: number;
+  name: string;
+  username: string | null;
+  is_creator: boolean;
+  away_until: string | null;
+  /** False: the bot can't write to them in private (they never pressed Start). */
+  dm_available: boolean;
+}
+
+export interface SettingsOptions {
+  languages: string[];
+  timezones: string[];
+  currencies: string[];
+  repeat_hours: number[];
+  max_repeat_hours: number;
+  quiet_hours: QuietHours[];
+  reminder_times: string[];
+  max_category_name: number;
+}
+
+export interface SettingsData {
+  room: Room;
+  me_member_id: number;
+  /** Chat admins and the room's creator may change settings, categories and roommates. */
+  can_manage: boolean;
+  quiet_hours: QuietHours | null;
+  repeat_after_hours: number;
+  weekly_summary: boolean;
+  categories: CategorySettings[];
+  members: MemberInfo[];
+  options: SettingsOptions;
+}
+
+/** Only the fields that are sent change; `quiet_hours: null` switches them off. */
+export interface RoomSettingsPatch {
+  language?: string;
+  timezone?: string;
+  quiet_hours?: QuietHours | null;
+  repeat_after_hours?: number;
+  currency?: string;
+  weekly_summary?: boolean;
+}
+
+export interface CategoryPatch {
+  name?: string;
+  emoji?: string;
+  reminder_time?: string;
+  reminder_days?: number[];
+  mode?: "round_robin" | "fair";
+  is_active?: boolean;
 }

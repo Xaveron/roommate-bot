@@ -55,3 +55,21 @@ export function initials(name: string): string {
     .map((part) => [...part][0] ?? "");
   return letters.join("").toUpperCase() || "?";
 }
+
+/** "2026-09-26" + 6 days -> "2026-10-02" (calendar days, no timezone involved). */
+export function addDays(day: string, days: number): string {
+  const date = new Date(`${day}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * "23,50" -> 2350, for previews only: the backend parses amounts itself (and more leniently,
+ * e.g. "120 лей"), so an unparsed value is still sent as typed.
+ */
+export function previewCents(text: string): number | null {
+  const cleaned = text.replace(/[\s ]/g, "").replace(",", ".");
+  if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) return null;
+  const cents = Math.round(Number.parseFloat(cleaned) * 100);
+  return cents > 0 ? cents : null;
+}

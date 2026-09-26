@@ -31,6 +31,8 @@ function fill(template: string, params: Record<string, string | number>): string
 
 export interface Translator {
   language: Language;
+  /** Whether a key exists (for keys built at runtime, e.g. from a backend error code). */
+  has(key: string): key is Key;
   t(key: Key, params?: Record<string, string | number>): string;
   /** Plural-aware: `tn("stats.chores", 5)` -> "5 дел". */
   tn(key: Key, n: number, params?: Record<string, string | number>): string;
@@ -42,6 +44,7 @@ export function translator(language: Language): Translator {
   const order = PLURAL_ORDER[language];
   return {
     language,
+    has: (key): key is Key => Object.hasOwn(dictionary, key),
     t: (key, params = {}) => fill(dictionary[key], params),
     tn: (key, n, params = {}) => {
       const forms = dictionary[key].split("|");

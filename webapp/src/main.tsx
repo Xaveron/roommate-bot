@@ -4,8 +4,11 @@ import App from "./App";
 import "./styles.css";
 import { webApp } from "./telegram";
 
-webApp()?.ready();
-webApp()?.expand();
+const app = webApp();
+app?.ready();
+app?.expand();
+// Scrolling a long list must not close the app (Telegram 7.7+).
+if (app?.isVersionAtLeast?.("7.7")) app.disableVerticalSwipes();
 
 const root = document.getElementById("root");
 if (root) {
