@@ -1,21 +1,25 @@
 # Deploying RoomMate Bot to a VPS
 
 This guide sets up a fresh **Ubuntu 24.04** server so that the bot runs 24/7 in Docker, with
-PostgreSQL, daily backups and a hardened SSH. It needs about 1 vCPU, 1 GB of RAM and 10 GB of
-disk.
+PostgreSQL, the Mini App over HTTPS, daily backups and a hardened SSH. It needs about 1 vCPU,
+1.5 GB of RAM and 10 GB of disk.
 
 ```
 ┌──────────────── VPS (ufw: 22, 80, 443) ────────────────┐
 │  docker compose -f docker-compose.prod.yml             │
 │   ├─ bot       long polling → api.telegram.org        │
 │   ├─ postgres  volume "postgres-data", no open port   │
-│   └─ caddy     (stage 4, Mini App over HTTPS)         │
+│   ├─ webapp    FastAPI + React build, internal :8000  │
+│   └─ caddy     :80/:443, HTTPS → webapp               │
 │  cron 03:30 → scripts/backup_db.sh → backups/*.dump   │
 └────────────────────────────────────────────────────────┘
 ```
 
-The bot uses **long polling**, so it doesn't need a domain, HTTPS or an open port. Only one
-instance may run per bot token: stop any local copy before starting the server one.
+The bot uses **long polling**, so the bot itself needs no open port. The Mini App needs HTTPS
+(a Telegram requirement): Caddy gets a free Let's Encrypt certificate for `WEBAPP_DOMAIN`. With
+no domain of your own, [sslip.io](https://sslip.io) works: `194-62-105-206.sslip.io` resolves to
+`194.62.105.206`. Only one instance may run per bot token: stop any local copy before starting
+the server one.
 
 Commands marked `local$` run on your computer. `server$` means the server, as the `deploy` user.
 
@@ -140,6 +144,7 @@ cd /opt/roommate-bot
 cp .env.example .env
 chmod 600 .env
 sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$(openssl rand -hex 24)/" .env
+sed -i "s/^WEBAPP_DOMAIN=.*/WEBAPP_DOMAIN=$(curl -s https://api.ipify.org | tr . -).sslip.io/" .env
 nano .env        # set BOT_TOKEN (from @BotFather), ADMIN_IDS if you like
 ```
 
@@ -152,7 +157,17 @@ docker compose -f docker-compose.prod.yml ps
 docker compose -f docker-compose.prod.yml logs -f bot     # Ctrl+C to stop watching
 ```
 
-A healthy start ends with `Starting @your_bot_username`. Then enable the daily backup:
+A healthy start ends with `Starting @your_bot_username`. Check the Mini App too. The first
+start of Caddy needs a few seconds to get the certificate:
+
+```bash
+curl -s https://$(grep ^WEBAPP_DOMAIN= .env | cut -d= -f2)/api/health    # {"status":"ok"}
+docker compose -f docker-compose.prod.yml logs caddy | grep -i certificate
+```
+
+In Telegram, the private chat with the bot now has a **📱 App** button next to the message field.
+
+Then enable the daily backup:
 
 ```bash
 sudo install -m 644 deploy/roommate-backup.cron /etc/cron.d/roommate-backup
@@ -230,4 +245,6 @@ To move to a new server, set it up with sections 1–2, copy a dump into its `ba
 | `TelegramConflictError: terminated by other getUpdates request` | Another copy of the bot runs with the same token (e.g. on a laptop). Stop it |
 | `set POSTGRES_PASSWORD in .env` | The variable is empty. Generate it as in section 2 **before** the first start: the database keeps the password it was created with |
 | Bot restarts in a loop | `docker compose -f docker-compose.prod.yml logs --tail 50 bot` shows the reason |
+| Caddy: `challenge failed` / no certificate | Ports 80 and 443 must be reachable from the internet (ufw, provider firewall), and `WEBAPP_DOMAIN` must resolve to this server. Don't delete the `caddy-data` volume: Let's Encrypt limits how often certificates are issued |
+| Mini App says "session expired" | Telegram's `initData` is older than `WEBAPP_INITDATA_MAX_AGE` (24 h). Reopen the app |
 | No reminders at the expected time | Check the room timezone and quiet hours in `/settings`. The server clock doesn't matter, rooms use their own timezone |

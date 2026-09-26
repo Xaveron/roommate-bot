@@ -15,12 +15,11 @@ Interface languages: 🇷🇺 Russian, 🇷🇴 Romanian and 🇬🇧 English, c
 
 ## Screenshots
 
-| Reminder in private chat | Queue | History |
-|:---:|:---:|:---:|
-| _screenshot coming soon_ | _screenshot coming soon_ | _screenshot coming soon_ |
+The Mini App (opened from the bot), with demo data:
 
-<!-- Put images into docs/screenshots/ and replace the placeholders, e.g.
-![Reminder](docs/screenshots/reminder.png) -->
+| Queue | History | Balance | Statistics |
+|:---:|:---:|:---:|:---:|
+| <img src="docs/screenshots/queue.png" width="200" alt="Queues of every category"> | <img src="docs/screenshots/history.png" width="200" alt="History table"> | <img src="docs/screenshots/balance.png" width="200" alt="Balances and transfers"> | <img src="docs/screenshots/stats.png" width="200" alt="Monthly statistics with charts"> |
 
 ## Features
 
@@ -58,6 +57,9 @@ Interface languages: 🇷🇺 Russian, 🇷🇴 Romanian and 🇬🇧 English, c
   is a leaderboard. Achievements include 👑 Bread King, 🥷 Trash Ninja and 🔥 No Skips. The
   group gets a weekly summary on Sunday evening.
 - **Export.** `/export` sends CSV files: one per category plus the expenses.
+- **Mini App** (`/app` or the **📱 App** menu button). It shows queues, a history table, balances
+  and statistics with interactive charts, adapts to the Telegram light and dark themes, and is
+  available in ru, ro and en.
 - **Resilient delivery.** If a roommate never opened the bot in private chat, the reminder
   goes to the group chat instead, with a mention and a hint.
 
@@ -67,7 +69,7 @@ Interface languages: 🇷🇺 Russian, 🇷🇴 Romanian and 🇬🇧 English, c
 - [x] **Stage 2:** "fair" queue mode, repeated reminders, "I'm away" mode, confirmations
 - [x] **Stage 3:** expenses and balances, shopping list, statistics and charts,
       achievements, weekly summary, CSV export
-- [ ] **Stage 4:** Telegram Mini App (FastAPI + web UI)
+- [x] **Stage 4:** Telegram Mini App (React + Vite, FastAPI, Caddy HTTPS)
 
 ## Commands
 
@@ -91,6 +93,7 @@ Interface languages: 🇷🇺 Russian, 🇷🇴 Romanian and 🇬🇧 English, c
 | `/stats` | both | This month by person and category, with a chart (◀ previous months) |
 | `/top` | both | Monthly leaderboard and achievements |
 | `/export` | both | CSV files: history per category and expenses |
+| `/app` | both | Open the Mini App (in a group: a link to private chat, where Telegram allows Mini App buttons) |
 | `/leave` | group | Leave the room |
 | `/room` | private | Pick the active room if you live in several |
 | `/cancel` | both | Cancel the current input |
@@ -156,6 +159,25 @@ Skips (10 in a row), 🛒 Provider (10 list items), 💰 Treasurer (10 expenses)
 
 **The weekly summary** comes on Sunday at 20:00 room time, outside quiet hours. It can be
 turned off in `/settings`.
+
+## Mini App
+
+The frontend is React + Vite (`webapp/`). The backend is a small read-only FastAPI app
+(`bot/webapi/`) that uses the same database and services as the bot. In production, both run
+behind Caddy, which provides HTTPS with automatic Let's Encrypt certificates.
+
+- **Authentication.** Every API request carries `Authorization: tma <Telegram.WebApp.initData>`.
+  The backend recomputes the HMAC-SHA256 signature with a key derived from the bot token (as
+  [Telegram documents](https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app))
+  and compares it in constant time. It rejects stale data (`auth_date` older than
+  `WEBAPP_INITDATA_MAX_AGE`) and duplicated fields. There are no passwords or cookies.
+- **Access.** A user only sees rooms where they are an active member. Other rooms return 404,
+  so room ids can't be probed.
+- **Opening the app.** Use the menu button next to the message field or `/app` in private chat,
+  which opens the current room. In a group, `/app` gives a link to private chat, because
+  Telegram doesn't allow Mini App buttons in groups. `?tab=balance` opens a specific tab.
+- BotFather needs no extra setup. Optionally, *Bot Settings → Configure Mini App* enables direct
+  `t.me/<bot>?startapp=r<room id>` links.
 
 ## Quick start
 
@@ -224,6 +246,10 @@ All settings come from environment variables (or `.env`):
 | `LOG_LEVEL` | `INFO` | Logging level |
 | `SCHEDULER_TICK_SECONDS` | `60` | How often due reminders are checked |
 | `AUTO_MIGRATE` | `true` | Apply Alembic migrations on startup |
+| `WEBAPP_URL` | — | Public HTTPS address of the Mini App. Without it, the bot doesn't offer the app |
+| `WEBAPP_DOMAIN` | — | Production: the domain Caddy gets a certificate for. `WEBAPP_URL` is derived from it |
+| `WEBAPP_INITDATA_MAX_AGE` | `86400` | How long a Mini App session (Telegram `initData`) stays valid, in seconds |
+| `WEBAPP_DIST` | `webapp/dist` | Built frontend served by the API |
 
 ## Deployment
 
@@ -267,8 +293,12 @@ bot/
 ├── middlewares/       # DB session, room context, i18n
 ├── scheduler/         # APScheduler tick
 └── locales/           # ru / ro / en .ftl files
+├── webapi/            # FastAPI backend of the Mini App (initData auth, read-only API)
+├── render.py, charts.py  # message texts and PNG charts for stage 3 features
 migrations/            # Alembic (async)
-tests/                 # pytest: algorithm, services, i18n, migrations, bot flow
+webapp/                # Mini App frontend: React + Vite + TypeScript, Recharts
+deploy/                # Caddyfile, backup cron job
+tests/                 # pytest: algorithm, services, i18n, migrations, bot flow, web API
 ```
 
 Some of the design decisions:
@@ -290,7 +320,18 @@ pip install -r requirements-dev.txt
 pytest                  # tests (no Telegram needed)
 ruff check . && ruff format .
 alembic revision --autogenerate -m "describe change"   # after changing models
+
+# The same suite on PostgreSQL:
+docker run -d --name pg -e POSTGRES_PASSWORD=test -p 127.0.0.1:55432:5432 postgres:17-alpine
+TEST_DATABASE_URL=postgresql+asyncpg://postgres:test@127.0.0.1:55432/postgres pytest
+
+# Mini App (Node 20.19+): API on :8000, Vite dev server with a proxy to it
+python -m bot.webapi
+cd webapp && npm install && npm run dev      # typecheck / test / build: npm run typecheck|test|build
 ```
+
+Outside Telegram, the Mini App shows "open it from Telegram": it can't work without the signed
+`initData`.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
 

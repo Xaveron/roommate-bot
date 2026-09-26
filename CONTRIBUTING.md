@@ -28,7 +28,11 @@ pytest
   Then review the generated file. `tests/test_migrations.py` checks that the migrations
   match the models.
 - **Style.** Run `ruff check . && ruff format .` before you push. CI runs them together with
-  `pytest`.
+  `pytest` (on SQLite, and on PostgreSQL via `TEST_DATABASE_URL`).
+- **Mini App** (`webapp/`, Node 20.19+). Its texts live in `webapp/src/i18n/{ru,ro,en}.ts`, and
+  TypeScript fails the build if a key is missing in one of them. Before you push, run
+  `npm run typecheck && npm test && npm run build`. The API (`bot/webapi/`) is read-only and
+  must keep checking Telegram `initData` for every request.
 
 ## Commit messages
 
@@ -46,6 +50,6 @@ chore(ci): cache pip dependencies
 
 - [ ] Tests added or updated, and `pytest` passes
 - [ ] `ruff check .` and `ruff format --check .` pass
-- [ ] New strings added to ru, ro and en
+- [ ] New strings added to ru, ro and en (bot `.ftl` files and `webapp/src/i18n`)
 - [ ] Migration added if the models changed
 - [ ] README updated if commands or settings changed

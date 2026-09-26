@@ -1,6 +1,6 @@
 [project]
 name = "roommate-bot"
-version = "0.1.0"
+version = "0.4.0"
 description = "Telegram bot that helps dorm roommates share chores: queues, reminders, history."
 readme = "README.md"
 license = { text = "MIT" }
