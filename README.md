@@ -227,6 +227,10 @@ All settings come from environment variables (or `.env`):
 
 ## Deployment
 
+**Step-by-step production guide:** [docs/DEPLOY.md](docs/DEPLOY.md). It covers a hardened
+Ubuntu server, Docker, the bot with PostgreSQL (`docker-compose.prod.yml`), daily backups with
+restore, logs and updates.
+
 The bot uses **long polling**, so it doesn't need a domain, HTTPS or open ports. Anything
 with outbound internet access works. Run **exactly one instance** per token.
 

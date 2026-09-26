@@ -1,0 +1,12 @@
+# Caddy config for the Telegram Mini App (stage 4). Not used yet.
+#
+# 1. Create a DNS A record (e.g. app.example.com) pointing to the server.
+# 2. Replace the domain below and uncomment the block.
+# 3. Uncomment the `caddy` service in docker-compose.prod.yml and run
+#    `docker compose -f docker-compose.prod.yml up -d`.
+# Caddy obtains and renews the HTTPS certificate by itself.
+
+# app.example.com {
+#     encode zstd gzip
+#     reverse_proxy webapp:8000
+# }

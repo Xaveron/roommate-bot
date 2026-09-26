@@ -22,3 +22,6 @@ data/*
 .idea/
 .vscode/
 .DS_Store
+
+# Database dumps (production)
+backups/
