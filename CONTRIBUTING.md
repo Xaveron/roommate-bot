@@ -31,8 +31,10 @@ pytest
   `pytest` (on SQLite, and on PostgreSQL via `TEST_DATABASE_URL`).
 - **Mini App** (`webapp/`, Node 20.19+). Its texts live in `webapp/src/i18n/{ru,ro,en}.ts`, and
   TypeScript fails the build if a key is missing in one of them. Before you push, run
-  `npm run typecheck && npm test && npm run build`. The API (`bot/webapi/`) is read-only and
-  must keep checking Telegram `initData` for every request.
+  `npm run typecheck && npm test && npm run build`. The API (`bot/webapi/`) must keep checking
+  Telegram `initData` for every request. Its actions go through the same services as the bot
+  (rights included), run as an `Action` that holds the room's lock, and post to Telegram
+  through `bot/announcements.py`, so an action has the same effect wherever it's taken.
 
 ## Commit messages
 

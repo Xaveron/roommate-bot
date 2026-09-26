@@ -30,7 +30,8 @@ services:
     mem_limit: 768m
     logging: *logging
 
-  # Telegram Mini App: read-only JSON API (checks Telegram initData) + the built frontend.
+  # Telegram Mini App: JSON API (checks Telegram initData; sends to Telegram, never polls)
+  # + the built frontend.
   webapp:
     build:
       context: .

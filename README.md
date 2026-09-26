@@ -17,9 +17,11 @@ Interface languages: 🇷🇺 Russian, 🇷🇴 Romanian and 🇬🇧 English, c
 
 The Mini App (opened from the bot), with demo data:
 
-| Queue | History | Balance | Statistics |
-|:---:|:---:|:---:|:---:|
-| <img src="docs/screenshots/queue.png" width="200" alt="Queues of every category"> | <img src="docs/screenshots/history.png" width="200" alt="History table"> | <img src="docs/screenshots/balance.png" width="200" alt="Balances and transfers"> | <img src="docs/screenshots/stats.png" width="200" alt="Monthly statistics with charts"> |
+| Queue | Shopping list | Balance |
+|:---:|:---:|:---:|
+| <img src="docs/screenshots/queue.png" width="200" alt="Queues with the answers to a reminder"> | <img src="docs/screenshots/shopping.png" width="200" alt="Shopping list"> | <img src="docs/screenshots/balance.png" width="200" alt="Balances, transfers and expenses"> |
+| **History** | **Statistics** | **Room** |
+| <img src="docs/screenshots/history.png" width="200" alt="History with 👍 / 🤨 votes"> | <img src="docs/screenshots/stats.png" width="200" alt="Monthly statistics with charts"> | <img src="docs/screenshots/room.png" width="200" alt="Roommates, settings and categories"> |
 
 ## Features
 
@@ -57,9 +59,12 @@ The Mini App (opened from the bot), with demo data:
   is a leaderboard. Achievements include 👑 Bread King, 🥷 Trash Ninja and 🔥 No Skips. The
   group gets a weekly summary on Sunday evening.
 - **Export.** `/export` sends CSV files: one per category plus the expenses.
-- **Mini App** (`/app` or the **📱 App** menu button). It shows queues, a history table, balances
-  and statistics with interactive charts, adapts to the Telegram light and dark themes, and is
-  available in ru, ro and en.
+- **Mini App** (`/app` or the **📱 App** menu button). Everything the bot does, in one app:
+  answer reminders and mark chores (with what they cost), vote 👍 / 🤨, add expenses and settle
+  debts, keep the shopping list, go away and come back, and — for chat admins and the room
+  creator — change settings, categories and roommates. Plus a history table, balances,
+  statistics with interactive charts and CSV export. Every action has the same effect in
+  Telegram as in the bot. It follows the Telegram light and dark themes and speaks ru, ro and en.
 - **Resilient delivery.** If a roommate never opened the bot in private chat, the reminder
   goes to the group chat instead, with a mention and a hint.
 
@@ -70,6 +75,7 @@ The Mini App (opened from the bot), with demo data:
 - [x] **Stage 3:** expenses and balances, shopping list, statistics and charts,
       achievements, weekly summary, CSV export
 - [x] **Stage 4:** Telegram Mini App (React + Vite, FastAPI, Caddy HTTPS)
+- [x] **Stage 5:** everything the bot can do, in the Mini App
 
 ## Commands
 
@@ -162,9 +168,9 @@ turned off in `/settings`.
 
 ## Mini App
 
-The frontend is React + Vite (`webapp/`). The backend is a small read-only FastAPI app
-(`bot/webapi/`) that uses the same database and services as the bot. In production, both run
-behind Caddy, which provides HTTPS with automatic Let's Encrypt certificates.
+The frontend is React + Vite (`webapp/`). The backend is a small FastAPI app (`bot/webapi/`)
+that uses the same database and services as the bot. In production it runs as a separate
+container behind Caddy, which provides HTTPS with automatic Let's Encrypt certificates.
 
 - **Authentication.** Every API request carries `Authorization: tma <Telegram.WebApp.initData>`.
   The backend recomputes the HMAC-SHA256 signature with a key derived from the bot token (as
@@ -172,7 +178,23 @@ behind Caddy, which provides HTTPS with automatic Let's Encrypt certificates.
   and compares it in constant time. It rejects stale data (`auth_date` older than
   `WEBAPP_INITDATA_MAX_AGE`) and duplicated fields. There are no passwords or cookies.
 - **Access.** A user only sees rooms where they are an active member. Other rooms return 404,
-  so room ids can't be probed.
+  so room ids can't be probed. Rights are the bot's: anybody who lives in the room marks
+  chores, adds expenses and categories; settings, changing or deleting categories and removing
+  roommates are for chat admins and the room creator (Telegram is asked via `getChatMember`).
+  Somebody from the group chat who hasn't joined yet can join from the app.
+- **Same effect as the bot.** Actions call the same services and post the same messages: the
+  group gets the announcement with 👍 / 🤨, the next roommate gets the reminder, the reminder
+  message in private chat is updated, achievements are congratulated. The app only *sends*
+  through the Bot API; only the bot process receives updates.
+- **Two processes, one room.** The bot and the app are separate processes, so every change of a
+  room runs in one transaction that first takes a PostgreSQL advisory lock of the room
+  (`bot/db/locks.py`). "Done" pressed in Telegram and in the app at the same moment counts once.
+- **Retries are safe.** Every action carries an `Idempotency-Key`; a repeated request (a lost
+  response, a double tap) gets the first answer instead of doing the action twice. Errors come
+  as `{"detail": {"code", "message"}}` with the message in the room's language.
+- **In the app.** Telegram's MainButton and BackButton, haptic feedback, confirmation of
+  destructive actions, and data that refreshes by itself (every few seconds and when you come
+  back to the app), so changes made in the bot show up.
 - **Opening the app.** Use the menu button next to the message field or `/app` in private chat,
   which opens the current room. In a group, `/app` gives a link to private chat, because
   Telegram doesn't allow Mini App buttons in groups. `?tab=balance` opens a specific tab.
@@ -293,7 +315,7 @@ bot/
 ├── middlewares/       # DB session, room context, i18n
 ├── scheduler/         # APScheduler tick
 └── locales/           # ru / ro / en .ftl files
-├── webapi/            # FastAPI backend of the Mini App (initData auth, read-only API)
+├── webapi/            # FastAPI backend of the Mini App (initData auth, reads and actions)
 ├── render.py, charts.py  # message texts and PNG charts for stage 3 features
 migrations/            # Alembic (async)
 webapp/                # Mini App frontend: React + Vite + TypeScript, Recharts
