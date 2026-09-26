@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
+import pytest
 from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.pool import NullPool
 
 from bot.db.models import Base
 from bot.migrate import alembic_config, upgrade
+from tests.conftest import TEST_DATABASE_URL
 
 
 def test_upgrade_matches_models_and_downgrade_works(tmp_path: Path):
@@ -96,3 +101,39 @@ def test_stage_two_database_with_data_upgrades(tmp_path: Path):
         assert tuple(duty) == (2350, "confirmed")
         assert connection.execute(text("SELECT count(*) FROM expenses")).scalar() == 0
     engine.dispose()
+
+
+@pytest.mark.skipif(not TEST_DATABASE_URL, reason="needs TEST_DATABASE_URL (PostgreSQL)")
+def test_migrations_on_postgresql():
+    """Upgrade to head on a real PostgreSQL, compare with the models, downgrade to base."""
+    url = TEST_DATABASE_URL
+    assert url is not None
+
+    async def run(work):
+        engine = create_async_engine(url, poolclass=NullPool)
+        try:
+            async with engine.begin() as connection:
+                return await connection.run_sync(work)
+        finally:
+            await engine.dispose()
+
+    def reset(connection):
+        Base.metadata.drop_all(connection)
+        connection.execute(text("DROP TABLE IF EXISTS alembic_version"))
+
+    def compare(connection):
+        context = MigrationContext.configure(connection, opts={"compare_type": True})
+        return compare_metadata(context, Base.metadata)
+
+    def tables(connection):
+        return set(inspect(connection).get_table_names())
+
+    asyncio.run(run(reset))
+    try:
+        upgrade(url)
+        diff = asyncio.run(run(compare))
+        assert diff == [], f"models and migrations differ on PostgreSQL: {diff}"
+        command.downgrade(alembic_config(url), "base")
+        assert asyncio.run(run(tables)) == {"alembic_version"}
+    finally:
+        asyncio.run(run(reset))

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import os
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.pool import NullPool, StaticPool
 
 from bot.db import Database
 from bot.db.models import Base, Member, Room
@@ -18,6 +19,11 @@ TZ = "Europe/Chisinau"
 NAMES = {"bread": "Хлеб", "water": "Вода", "trash": "Мусор"}
 PEOPLE = ("Аня", "Боря", "Вика", "Гриша")
 
+# Run the suite against PostgreSQL instead of in-memory SQLite, e.g.
+# TEST_DATABASE_URL=postgresql+asyncpg://postgres:test@127.0.0.1:55432/roommate_test pytest
+# The database is wiped before and after every test.
+TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
+
 
 def at(local: str) -> datetime:
     """'2026-09-25 18:00' in the room timezone -> aware UTC datetime."""
@@ -26,12 +32,21 @@ def at(local: str) -> datetime:
 
 @pytest.fixture
 async def db() -> AsyncIterator[Database]:
-    url = "sqlite+aiosqlite://"
-    engine = create_engine(url, poolclass=StaticPool)
+    if TEST_DATABASE_URL:
+        url = TEST_DATABASE_URL
+        engine = create_engine(url, poolclass=NullPool)
+        async with engine.begin() as connection:
+            await connection.run_sync(Base.metadata.drop_all)
+    else:
+        url = "sqlite+aiosqlite://"
+        engine = create_engine(url, poolclass=StaticPool)
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
     database = Database(url, engine=engine)
     yield database
+    if TEST_DATABASE_URL:
+        async with engine.begin() as connection:
+            await connection.run_sync(Base.metadata.drop_all)
     await database.dispose()
 
 
