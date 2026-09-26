@@ -8,6 +8,7 @@ from datetime import datetime, time
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.db.locks import lock_room
 from bot.db.models import CategoryKind, Member, Room, User
 from bot.db.repositories import CategoryRepo, MemberRepo, RoomRepo
 from bot.services.categories import CategoryService
@@ -86,6 +87,7 @@ class RoomService:
 
     async def join(self, room: Room, user: User, now: datetime) -> tuple[Member, bool]:
         """Add the user to the room. Returns (member, joined_now)."""
+        await lock_room(self.session, room.id)
         member = await self.members.get_by_user(room.id, user.id)
         if member is not None and member.is_active:
             return member, False
@@ -118,6 +120,7 @@ class RoomService:
 
     async def leave(self, member: Member) -> None:
         """Deactivate the member. Their open turns are handed over by the scheduler."""
+        await lock_room(self.session, member.room_id)
         member.is_active = False
         await self.session.flush()
 
@@ -132,6 +135,7 @@ class RoomService:
         new_names: Mapping[str, str],
     ) -> None:
         """Switch language; default categories that kept their default name get translated."""
+        await lock_room(self.session, room.id)
         room.language = language
         for category in await self.categories.list(room.id):
             if category.kind == CategoryKind.CUSTOM:
@@ -143,18 +147,21 @@ class RoomService:
     async def set_timezone(self, room: Room, timezone: str) -> None:
         if not is_valid_timezone(timezone):
             raise ServiceError("err-bad-timezone")
+        await lock_room(self.session, room.id)
         room.timezone = timezone
         await self.session.flush()
 
     async def set_quiet_hours(self, room: Room, start: time | None, end: time | None) -> None:
-        if (start is None) != (end is None):
+        if (start is None) != (end is None) or (start is not None and start == end):
             raise ServiceError("err-bad-time-range")
+        await lock_room(self.session, room.id)
         room.quiet_hours_start, room.quiet_hours_end = start, end
         await self.session.flush()
 
     async def set_repeat_hours(self, room: Room, hours: int) -> None:
         if not 0 <= hours <= MAX_REPEAT_HOURS:
             raise ServiceError("err-generic")
+        await lock_room(self.session, room.id)
         room.repeat_after_hours = hours
         await self.session.flush()
 
@@ -162,11 +169,16 @@ class RoomService:
         currency = currency.strip().upper()
         if not (currency.isalpha() and 2 <= len(currency) <= 5):
             raise ServiceError("err-generic")
+        await lock_room(self.session, room.id)
         room.currency = currency
         await self.session.flush()
 
     async def toggle_weekly_summary(self, room: Room) -> None:
-        room.weekly_summary = not room.weekly_summary
+        await self.set_weekly_summary(room, not room.weekly_summary)
+
+    async def set_weekly_summary(self, room: Room, enabled: bool) -> None:
+        await lock_room(self.session, room.id)
+        room.weekly_summary = enabled
         await self.session.flush()
 
     async def migrate_chat(self, old_chat_id: int, new_chat_id: int) -> Room | None:

@@ -20,6 +20,7 @@ from sqlalchemy import (
     Integer,
     MetaData,
     String,
+    Text,
     Time,
     UniqueConstraint,
     false,
@@ -299,6 +300,9 @@ class Duty(Base):
     assignment_id: Mapped[int | None] = mapped_column(
         ForeignKey("assignments.id", ondelete="SET NULL")
     )
+    # The announcement in the group chat whose 👍 / 🤨 buttons show the votes.
+    message_chat_id: Mapped[int | None] = mapped_column(BigInteger)
+    message_id: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
     member: Mapped[Member] = relationship(lazy="joined", innerjoin=True)
@@ -394,3 +398,21 @@ class Achievement(Base):
     member_id: Mapped[int] = mapped_column(ForeignKey("members.id", ondelete="CASCADE"), index=True)
     code: Mapped[str] = mapped_column(String(32))
     earned_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class ApiRequest(Base):
+    """A Mini App action that was already carried out, by the client's Idempotency-Key.
+
+    A repeated request (a retry after a lost response, a double tap) gets the stored response
+    instead of doing the action twice.
+    """
+
+    __tablename__ = "api_requests"
+    __table_args__ = (UniqueConstraint("user_id", "key"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger)
+    key: Mapped[str] = mapped_column(String(64))
+    status_code: Mapped[int] = mapped_column(Integer)
+    response: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)

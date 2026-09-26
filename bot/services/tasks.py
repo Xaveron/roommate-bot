@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.db.locks import lock_room, refreshed
 from bot.db.models import (
     OPEN_ASSIGNMENT_STATUSES,
     Assignment,
@@ -61,6 +62,9 @@ class TaskService:
         self, assignment_id: int, user_id: int, allowed: Iterable[str]
     ) -> Assignment:
         assignment = await self.assignments.get(assignment_id)
+        if assignment is not None:
+            await lock_room(self.session, assignment.category.room_id)
+            await refreshed(self.session, assignment)  # it may have changed while we waited
         if assignment is None or assignment.status not in set(allowed):
             raise ServiceError("err-assignment-closed")
         if assignment.member.telegram_user_id != user_id:
@@ -75,6 +79,7 @@ class TaskService:
 
     async def assign_next(self, category: Category, now: datetime) -> Assignment | None:
         """Create a pending assignment for whoever is next today (skipping today's decliners)."""
+        await lock_room(self.session, category.room_id)
         today = local_date(category.room.timezone, now)
         declined = await self.assignments.declined_member_ids(category.id, today)
         member = await self.queue.current(category, today, exclude=declined)
@@ -141,19 +146,32 @@ class TaskService:
 
     # --- manual marks --------------------------------------------------------------------
 
-    async def mark_done(self, category: Category, member: Member, now: datetime) -> Completion:
-        """/done: counts as the member's turn if it is theirs, otherwise as out of turn."""
+    async def mark_done(
+        self, category: Category, member: Member, now: datetime, *, in_turn: bool | None = None
+    ) -> Completion:
+        """/done: counts as the member's turn if it is theirs, otherwise as out of turn.
+
+        ``in_turn`` is what the caller expects. The Mini App offers either "Done" on the
+        member's own turn or "Did it out of turn"; if the queue moved in the meantime (e.g. the
+        same chore was just marked from the bot), nothing is recorded.
+        """
+        await lock_room(self.session, category.room_id)
+        if not category.is_active:
+            raise ServiceError("err-category-not-found")
         today = local_date(category.room.timezone, now)
         open_assignment = await self.assignments.get_open(category.id)
         if open_assignment is not None and open_assignment.member_id == member.id:
+            self._expect(in_turn, actual=True)
             return await self._complete_assignment(open_assignment, now)
 
         if open_assignment is None:
             declined = await self.assignments.declined_member_ids(category.id, today)
             current = await self.queue.current(category, today, exclude=declined)
             if current is not None and current.id == member.id:
+                self._expect(in_turn, actual=True)
                 return await self._finish(category, member, now, in_turn=True)
 
+        self._expect(in_turn, actual=False)
         covered = None
         if open_assignment is not None and await self.assignments.transition(
             open_assignment, OPEN_ASSIGNMENT_STATUSES, S.COVERED, closed_at=now
@@ -162,6 +180,11 @@ class TaskService:
         completion = await self._finish(category, member, now, in_turn=False)
         completion.covered = covered
         return completion
+
+    @staticmethod
+    def _expect(expected: bool | None, *, actual: bool) -> None:
+        if expected is not None and expected != actual:
+            raise ServiceError("err-turn-changed")
 
     async def _complete_assignment(self, assignment: Assignment, now: datetime) -> Completion:
         await self._transition(assignment, OPEN_ASSIGNMENT_STATUSES, S.DONE, closed_at=now)

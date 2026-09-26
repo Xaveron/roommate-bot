@@ -8,6 +8,7 @@ from datetime import datetime, time
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db import Database
+from bot.db.locks import lock_room
 from bot.db.models import Room
 from bot.db.repositories import RoomRepo
 from bot.notifications import Notifier
@@ -32,8 +33,10 @@ async def reminder_tick(db: Database, notifier: Notifier) -> None:
 
     for room_id, chat_id in rooms:
         try:
-            # The same lock as the room's updates: a tick never races a button press.
+            # The same locks as the room's updates: a tick never races a button press, neither
+            # in the bot nor in the Mini App (another process, hence the database lock).
             async with db.lock_for(chat_id), db.session() as session:
+                await lock_room(session, room_id)
                 room = await RoomRepo(session).get(room_id)
                 if room is None:
                     continue

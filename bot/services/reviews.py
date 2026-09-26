@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.db.locks import lock_room, refreshed
 from bot.db.models import (
     COMPLETED_DUTY_STATUSES,
     Duty,
@@ -60,6 +61,15 @@ class ReviewService:
         self.members = MemberRepo(session)
         self.categories = CategoryRepo(session)
 
+    @staticmethod
+    def is_open(duty: Duty, now: datetime) -> bool:
+        """Whether roommates may still confirm or dispute the record."""
+        return (
+            duty.status in COMPLETED_DUTY_STATUSES
+            and duty.review == ReviewStatus.OPEN
+            and now - duty.created_at <= REVIEW_WINDOW
+        )
+
     async def voters(self, room_id: int, performer_id: int) -> int:
         return sum(1 for m in await self.members.list(room_id) if m.id != performer_id)
 
@@ -68,11 +78,9 @@ class ReviewService:
         category = await self.categories.get(duty.category_id) if duty else None
         if duty is None or category is None or category.room_id != voter.room_id:
             raise ServiceError("err-vote-closed")
-        if (
-            duty.status not in COMPLETED_DUTY_STATUSES
-            or duty.review != ReviewStatus.OPEN
-            or now - duty.created_at > REVIEW_WINDOW
-        ):
+        await lock_room(self.session, category.room_id)
+        await refreshed(self.session, duty)  # another vote may have decided it meanwhile
+        if not self.is_open(duty, now):
             raise ServiceError("err-vote-closed")
         if duty.member_id == voter.id:
             raise ServiceError("err-vote-self")

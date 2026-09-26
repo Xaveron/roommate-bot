@@ -10,6 +10,7 @@ from aiogram.types import CallbackQuery, Chat, Message, TelegramObject
 from aiogram.types import User as TgUser
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.db.locks import lock_room, refreshed
 from bot.db.models import Room, User
 from bot.db.repositories import MemberRepo, RoomRepo, UserRepo
 from bot.i18n import Translator
@@ -25,6 +26,10 @@ class RoomContextMiddleware(BaseMiddleware):
     * in private chat it's the user's active room (or their only room).
 
     Puts ``user``, ``room`` and ``member`` (possibly None) into handler data.
+
+    In a group chat the room's lock (see ``bot.db.locks``) is taken before anything is read
+    or written, so the update never interleaves with the Mini App working on the same room.
+    In private chat the services take the lock of the room they change.
     """
 
     async def __call__(
@@ -37,6 +42,13 @@ class RoomContextMiddleware(BaseMiddleware):
         tg_user: TgUser | None = data.get("event_from_user")
         chat: Chat | None = data.get("event_chat")
         user = room = member = None
+        in_group = chat is not None and chat.type in GROUP_TYPES
+
+        if in_group:
+            room = await RoomRepo(session).get_by_chat_id(chat.id)  # type: ignore[union-attr]
+            if room is not None:
+                await lock_room(session, room.id)
+                await refreshed(session, room)
 
         if tg_user is not None and not tg_user.is_bot:
             user = await UserRepo(session).upsert(
@@ -49,9 +61,7 @@ class RoomContextMiddleware(BaseMiddleware):
             if chat is not None and chat.type == ChatType.PRIVATE:
                 user.dm_available = True
 
-        if chat is not None and chat.type in GROUP_TYPES:
-            room = await RoomRepo(session).get_by_chat_id(chat.id)
-        elif user is not None:
+        if not in_group and user is not None:
             room = await resolve_private_room(session, user)
 
         if room is not None and user is not None:

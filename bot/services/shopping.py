@@ -8,6 +8,7 @@ from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.db.locks import lock_room, refreshed
 from bot.db.models import Member, Room, ShoppingItem
 from bot.db.repositories import ShoppingRepo
 from bot.services.errors import ServiceError
@@ -39,6 +40,7 @@ class ShoppingService:
         wanted = split_items(text)
         if not wanted:
             raise ServiceError("err-buy-empty")
+        await lock_room(self.session, room.id)
         existing = await self.items.list_open(room.id)
         known = {item.text.casefold() for item in existing}
         fresh = [item for item in wanted if item.casefold() not in known]
@@ -54,7 +56,10 @@ class ShoppingService:
     async def mark_bought(
         self, room: Room, item_id: int, member: Member, now: datetime
     ) -> ShoppingItem:
+        await lock_room(self.session, room.id)
         item = await self.items.get(item_id)
+        if item is not None:
+            await refreshed(self.session, item)
         if item is None or item.room_id != room.id or item.bought_at is not None:
             raise ServiceError("err-item-gone")
         item.bought_by = member.id

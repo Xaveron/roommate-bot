@@ -19,6 +19,7 @@ from enum import StrEnum
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.db.locks import lock_room
 from bot.db.models import Assignment, AssignmentStatus, Category, Room
 from bot.db.repositories import AssignmentRepo, CategoryRepo
 from bot.services.clock import is_quiet, local_now
@@ -77,6 +78,7 @@ class ReminderService:
         """What must be delivered now (nothing during quiet hours)."""
         if not room.is_active or room_is_quiet(room, now):
             return []
+        await lock_room(self.session, room.id)
         moment = local_now(room.timezone, now)
         due: list[Delivery] = []
         for category in await self.categories.list(room.id, active_only=True):

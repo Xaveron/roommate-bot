@@ -1,5 +1,6 @@
 from bot.db.repositories.absences import AbsenceRepo
 from bot.db.repositories.achievements import AchievementRepo
+from bot.db.repositories.api_requests import ApiRequestRepo
 from bot.db.repositories.assignments import AssignmentRepo
 from bot.db.repositories.categories import CategoryRepo
 from bot.db.repositories.duties import DutyRepo
@@ -14,6 +15,7 @@ from bot.db.repositories.votes import VoteRepo
 __all__ = [
     "AbsenceRepo",
     "AchievementRepo",
+    "ApiRequestRepo",
     "AssignmentRepo",
     "CategoryRepo",
     "DutyRepo",

@@ -9,6 +9,7 @@ from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.db.locks import lock_room, refreshed
 from bot.db.models import Duty, Expense, ExpenseShare, Member, Room
 from bot.db.repositories import CategoryRepo, ExpenseRepo, MemberRepo
 from bot.services.clock import local_date
@@ -89,6 +90,7 @@ class FinanceService:
     ) -> Expense:
         if not 0 < amount_cents <= MAX_AMOUNT_CENTS:
             raise ServiceError("err-bad-amount")
+        await lock_room(self.session, room.id)
         description = " ".join(description.split())[:MAX_DESCRIPTION_LENGTH]
         roommates = {m.id for m in await self.members.list(room.id)}
         chosen = [m for m in dict.fromkeys(member_ids) if m in roommates]
@@ -113,6 +115,8 @@ class FinanceService:
         self, room: Room, duty: Duty, payer: Member, amount_cents: int, now: datetime
     ) -> Expense:
         """ "I bought bread for 23.50": split between everybody who is at home today."""
+        await lock_room(self.session, room.id)
+        await refreshed(self.session, duty)
         if duty.member_id != payer.id:
             raise ServiceError("err-not-your-button")
         if duty.amount_cents is not None:
@@ -140,9 +144,22 @@ class FinanceService:
         return settle(await self.balances(room))
 
     async def settle_debt(
-        self, room: Room, debtor_id: int, creditor_id: int, amount_cents: int, now: datetime
+        self,
+        room: Room,
+        debtor_id: int,
+        creditor_id: int,
+        amount_cents: int,
+        now: datetime,
+        *,
+        actor: Member | None = None,
     ) -> Expense:
-        """ "I paid my debt back": records the repayment of a currently suggested transfer."""
+        """ "I paid my debt back": records the repayment of a currently suggested transfer.
+
+        Only the debtor or the creditor (``actor``) may mark it.
+        """
+        if actor is not None and actor.id not in (debtor_id, creditor_id):
+            raise ServiceError("err-settle-not-yours")
+        await lock_room(self.session, room.id)
         current = next(
             (
                 t

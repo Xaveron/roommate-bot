@@ -10,6 +10,7 @@ from datetime import datetime
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.db.locks import lock_room
 from bot.db.models import (
     COMPLETED_DUTY_STATUSES,
     Achievement,
@@ -128,6 +129,7 @@ class AchievementService:
 
     async def evaluate(self, member: Member, now: datetime) -> list[str]:
         """Award whatever the member has newly earned; returns the new codes in display order."""
+        await lock_room(self.achievements.session, member.room_id)
         have = await self.achievements.codes(member.id)
         new = earned_codes(await self.progress(member)) - have
         awarded = []
